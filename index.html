@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Organization Knowledge ― 組織内人脈・知識グラフ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== 左：ナビゲーション ===== -->
+<nav class="sidebar">
+  <div class="brand">
+    <span class="brand-mark">OK</span>
+    <span class="brand-text">
+      Organization<br>Knowledge
+      <em>組織内人脈・知識グラフ</em>
+    </span>
+  </div>
+
+  <ul class="nav">
+    <li><button class="nav-item" data-screen="dashboard">ダッシュボード</button></li>
+    <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
+    <li><button class="nav-item is-locked" disabled>人物<span class="phase">Phase 2</span></button></li>
+    <li><button class="nav-item is-locked" disabled>人脈<span class="phase">Phase 4</span></button></li>
+    <li><button class="nav-item is-locked" disabled>AI検索<span class="phase">Phase 5</span></button></li>
+  </ul>
+
+  <div class="sidebar-foot">
+    <div id="conn" class="conn conn-unknown">接続を確認中…</div>
+    <p>デモ版 Phase 1<br>架空の名刺で操作してください</p>
+  </div>
+</nav>
+
+<!-- ===== 中央：メインコンテンツ ===== -->
+<main class="content">
+
+  <!-- ---------- ダッシュボード ---------- -->
+  <section id="screen-dashboard" class="screen">
+    <header class="page-head">
+      <h1>ダッシュボード</h1>
+      <p>名刺を起点に、人・組織・知識のつながりを蓄積します。</p>
+    </header>
+
+    <div class="stat-strip">
+      <div class="stat"><b id="stat-persons">0</b><span>人物</span></div>
+      <div class="stat"><b id="stat-orgs">0</b><span>組織</span></div>
+      <div class="stat"><b id="stat-cards">0</b><span>名刺</span></div>
+      <div class="stat"><b id="stat-size">0.00<i>MB</i></b><span>使用容量／約5MB</span></div>
+    </div>
+
+    <div id="storage-warning" class="alert alert-warn" hidden></div>
+
+    <div class="card-grid">
+      <button class="menu-card" data-screen="capture">
+        <h2>名刺登録</h2>
+        <p>名刺の画像から、AIが記載事項を項目に分けます。内容を確認してから登録します。</p>
+        <span class="menu-go">はじめる</span>
+      </button>
+      <div class="menu-card is-locked">
+        <h2>人物<span class="phase">Phase 2</span></h2>
+        <p>登録した人物の一覧・詳細・検索。専門分野の記録もここで行います。</p>
+      </div>
+      <div class="menu-card is-locked">
+        <h2>人脈<span class="phase">Phase 4</span></h2>
+        <p>人物をノード、関係をエッジとして、つながりを図で表示します。</p>
+      </div>
+      <div class="menu-card is-locked">
+        <h2>AI検索<span class="phase">Phase 5</span></h2>
+        <p>「旋盤加工について相談できる人は」といった質問に、登録情報だけを根拠に答えます。</p>
+      </div>
+    </div>
+
+    <section class="block">
+      <h3>登録済みの人物</h3>
+      <div id="recent-list"></div>
+    </section>
+
+    <section class="block">
+      <h3>データの管理</h3>
+      <p class="note">保存先はこのブラウザの中だけです。他の端末とは共有されません。発表前にバックアップを取ってください。</p>
+      <div class="btn-row">
+        <button class="btn" id="btn-export">JSONで書き出す</button>
+        <button class="btn" id="btn-import">JSONを読み込む</button>
+        <button class="btn btn-danger" id="btn-clear">すべて削除</button>
+        <input type="file" id="import-file" accept="application/json" hidden>
+      </div>
+    </section>
+  </section>
+
+  <!-- ---------- 名刺登録 ---------- -->
+  <section id="screen-capture" class="screen" hidden>
+    <header class="page-head">
+      <h1>名刺登録</h1>
+      <p>名刺の画像を選ぶと、AIが記載内容を読み取ります。</p>
+    </header>
+
+    <div id="capture-error" class="alert alert-error" hidden></div>
+
+    <div id="dropzone" class="dropzone" tabindex="0" role="button"
+         aria-label="名刺画像を選ぶ">
+      <div class="dz-icon" aria-hidden="true">
+        <svg viewBox="0 0 40 26" width="52" height="34">
+          <rect x="1" y="1" width="38" height="24" rx="2" fill="none"
+                stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="11" cy="9.5" r="3.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M5.5 20c1.2-3.2 3.3-4.8 5.5-4.8s4.3 1.6 5.5 4.8" fill="none"
+                stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M21 8.5h13M21 13h13M21 17.5h9" stroke="currentColor"
+                stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="dz-title">名刺を撮影する／画像を選ぶ</div>
+      <div class="dz-sub">ここにドラッグしても読み込めます</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+
+    <div id="reading" class="reading" hidden>
+      <img id="reading-preview" class="cardshot" alt="読み取り中の名刺">
+      <p class="progress"><span class="spinner" aria-hidden="true"></span>AIが名刺を読み取っています…</p>
+    </div>
+
+    <p class="note">
+      画像は長辺1280ピクセルに縮小してから送信します。
+      これはデモです。実在する方の名刺は使用しないでください。
+    </p>
+  </section>
+
+  <!-- ---------- OCR確認 ---------- -->
+  <section id="screen-confirm" class="screen" hidden>
+    <header class="page-head">
+      <h1>読み取り結果の確認</h1>
+      <p>AIが読み取った内容です。誤りを直してから登録してください。</p>
+    </header>
+
+    <div id="dup-warning" class="alert alert-warn" hidden></div>
+    <div id="confirm-error" class="alert alert-error" hidden></div>
+
+    <div class="confirm-layout">
+      <div class="confirm-image">
+        <img id="confirm-preview" class="cardshot" alt="読み取った名刺">
+        <div class="legend">
+          <span><i class="dot dot-ai"></i>AI＝名刺から読み取った値</span>
+          <span><i class="dot dot-human"></i>修正＝人が直した値</span>
+          <span><i class="dot dot-none"></i>―＝記載なし</span>
+        </div>
+      </div>
+
+      <div class="confirm-fields">
+        <div id="ledger" class="ledger"></div>
+        <div id="ai-note" class="ai-note" hidden></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-register">この内容で登録する</button>
+          <button class="btn" id="btn-retry">やり直す</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- 登録完了 ---------- -->
+  <section id="screen-done" class="screen" hidden>
+    <div class="done">
+      <div class="seal">登録</div>
+      <h1 id="done-name">登録しました</h1>
+      <p id="done-meta" class="note"></p>
+      <div class="btn-row">
+        <button class="btn btn-primary" data-screen="capture">続けて名刺を登録する</button>
+        <button class="btn" data-screen="dashboard">ダッシュボードへ</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="js/config.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/gemini.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
