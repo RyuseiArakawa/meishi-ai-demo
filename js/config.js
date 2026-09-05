@@ -17,6 +17,6 @@
 
 window.APP_CONFIG = {
 
-  API_ENDPOINT: "",
+  API_ENDPOINT: "meishi-ocr.muetai250115.workers.dev",
 
 };
