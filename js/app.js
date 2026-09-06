@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 14;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 15;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -50,7 +50,8 @@
      画面の切り替え
      ========================================================================= */
 
-  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person", "graph"];
+  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person",
+                   "orgs", "graph", "maintain"];
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -68,7 +69,9 @@
     if (name === "capture") resetCapture();
     if (name === "people") People.enter();
     if (name === "person") People.renderDetail(id);
+    if (name === "orgs") Orgs.enter();
     if (name === "graph") Graph.enter();
+    if (name === "maintain") Maintain.enter();
 
     window.scrollTo(0, 0);
   }
@@ -107,6 +110,8 @@
       warn.hidden = true;
     }
 
+    renderDependency();
+
     const persons = Storage.searchPersons("", "", "new").slice(0, 6);
     $("recent-list").innerHTML = persons.length
       ? persons.map(function (p) {
@@ -123,6 +128,53 @@
         + '<div class="btn-row"><button class="btn btn-sm" data-screen="people">'
         + "人物一覧をひらく</button></div>"
       : '<p class="empty">まだ登録がありません。「名刺登録」から始めてください。</p>';
+  }
+
+
+  /**
+   * 外部との接点が、社内の誰にどれだけ偏っているかを出す。
+   *
+   * 「名刺を何枚集めたか」ではなく「その人がいなくなると何が失われるか」を
+   * 見えるようにするための表示です。
+   */
+  function renderDependency() {
+    const d = Storage.getDependencyStats();
+    const block = $("dep-block");
+
+    if (!d.withContact) {
+      block.hidden = true;
+      return;
+    }
+    block.hidden = false;
+
+    const max = Math.max.apply(null, d.perUser.map((u) => u.contacts).concat([1]));
+
+    $("dep-body").innerHTML =
+        '<div class="dep-lead">'
+      +   "外部の <b>" + d.withContact + "</b> 名のうち、"
+      +   "社内で接点があるのが1人だけなのは <b>" + d.sole + "</b> 名"
+      +   "（<b>" + d.solePct + "%</b>）です。"
+      + "</div>"
+      + '<p class="note" style="margin:4px 0 14px">'
+      +   "その1人が異動や退職で抜けると、つながりが途切れます。"
+      + "</p>"
+      + '<div class="dep-bars">'
+      +   d.perUser.map(function (u) {
+            const w = Math.round((u.contacts / max) * 100);
+            const soleW = u.contacts ? Math.round((u.only / u.contacts) * w) : 0;
+            return '<div class="dep-row">'
+              + '<div class="dep-name">' + esc(u.user.name) + "</div>"
+              + '<div class="dep-bar"><span class="dep-fill" style="width:' + w + '%"></span>'
+              +   '<span class="dep-only" style="width:' + soleW + '%"></span></div>'
+              + '<div class="dep-num">' + u.contacts + " 名"
+              +   (u.only ? '<span class="dep-warn">うち ' + u.only + " 名はこの人だけ</span>" : "")
+              + "</div></div>";
+          }).join("")
+      + "</div>"
+      + '<p class="note" style="margin-top:10px">'
+      +   "濃い部分が「その人しか接点を持っていない相手」です。"
+      +   (d.none ? "　接点が記録されていない人物が " + d.none + " 名います。" : "")
+      + "</p>";
   }
 
 

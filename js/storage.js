@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["storage"] = 15;
+
 /* =============================================================================
    データ保存
 
@@ -889,6 +892,279 @@ const Storage = (function () {
     return null;
   }
 
+  /* --- 同じ人物をひとつにまとめる（名寄せ）--------------------------------
+
+     いまの作りでは、名刺を登録するたびに別の人物として記録されます。
+     複数人で使うと、同じ相手が何件も並ぶことになります。
+     ここでは、同じ人物らしい組を見つけ、人が確認したうえでまとめます。
+     -------------------------------------------------------------------------- */
+
+  /** 同じ人物らしい組をさがす。判断はせず、候補を返すだけ。 */
+  function findPersonDuplicates() {
+    const byKey = {};
+    const link = {};                     // 人物ID → まとめ先のID
+
+    function join(a, b) {
+      const ra = root(a), rb = root(b);
+      if (ra !== rb) link[rb] = ra;
+    }
+    function root(x) {
+      while (link[x] && link[x] !== x) x = link[x];
+      return x;
+    }
+
+    db.persons.forEach(function (p) {
+      link[p.id] = link[p.id] || p.id;
+
+      // 氏名が同じ
+      const nk = "n:" + fold(p.name);
+      if (byKey[nk]) join(byKey[nk], p.id); else byKey[nk] = p.id;
+
+      // メールアドレスが同じ（氏名が違っても同一人物とみなせる手がかり）
+      if (p.email) {
+        const ek = "e:" + fold(p.email);
+        if (byKey[ek]) join(byKey[ek], p.id); else byKey[ek] = p.id;
+      }
+    });
+
+    const groups = {};
+    db.persons.forEach(function (p) {
+      const r = root(p.id);
+      (groups[r] = groups[r] || []).push(p);
+    });
+
+    return Object.keys(groups)
+      .map((k) => groups[k])
+      .filter((g) => g.length > 1)
+      .sort((a, b) => b.length - a.length);
+  }
+
+  /**
+   * 複数の人物を1件にまとめる。
+   * 名刺・専門・交流・関係は、すべて残す方へ付け替えます。
+   * 残す側で空になっている項目は、消す側の値で埋めます。
+   */
+  function mergePersons(keepId, dropIds) {
+    const keep = getPerson(keepId);
+    if (!keep) return { ok: false, error: "まとめ先の人物が見つかりません。" };
+
+    const drops = (dropIds || []).filter((id) => id !== keepId && getPerson(id));
+    if (!drops.length) return { ok: false, error: "まとめる相手がいません。" };
+
+    const removedTopicKeys = [];
+    const changedCards = [], changedLogs = [];
+
+    drops.forEach(function (id) {
+      const p = getPerson(id);
+
+      // 空欄を埋める（すでに入っている値は上書きしない）
+      PERSON_FIELDS.forEach(function (k) {
+        if (!keep[k] && p[k]) keep[k] = p[k];
+      });
+      if (!keep.organization_id && p.organization_id) keep.organization_id = p.organization_id;
+
+      db.business_cards.forEach(function (c) {
+        if (c.person_id === id) { c.person_id = keepId; changedCards.push(c); }
+      });
+      db.interactions.forEach(function (i) {
+        if (i.person_id === id) { i.person_id = keepId; changedLogs.push(i); }
+      });
+      db.person_topics.forEach(function (pt) {
+        if (pt.person_id === id) {
+          removedTopicKeys.push({ person_id: id, topic_id: pt.topic_id });
+          pt.person_id = keepId;
+        }
+      });
+      db.relationships.forEach(function (r) {
+        if (r.from_person_id === id) r.from_person_id = keepId;
+        if (r.to_person_id === id) r.to_person_id = keepId;
+      });
+    });
+
+    // 同じ専門が二重にならないようにする
+    const seenT = {};
+    const keptTopics = [];
+    db.person_topics = db.person_topics.filter(function (pt) {
+      const k = pt.person_id + "|" + pt.topic_id;
+      if (seenT[k]) return false;
+      seenT[k] = true;
+      if (pt.person_id === keepId) keptTopics.push(pt);
+      return true;
+    });
+
+    // 自分自身との関係と、同じ相手・同じ種類の重複を取り除く
+    const removedRels = [];
+    const seenR = {};
+    db.relationships = db.relationships.filter(function (r) {
+      if (r.from_person_id === r.to_person_id) { removedRels.push(r); return false; }
+      const k = [r.from_person_id, r.to_person_id].sort().join("|") + "|" + r.relationship_type;
+      if (seenR[k]) { removedRels.push(r); return false; }
+      seenR[k] = true;
+      return true;
+    });
+    const keptRels = db.relationships.filter(
+      (r) => r.from_person_id === keepId || r.to_person_id === keepId);
+
+    db.persons = db.persons.filter((x) => drops.indexOf(x.id) < 0);
+    keep.updated_at = nowISO();
+    pruneOrganizations();
+
+    const ok = persist();
+
+    // 共有データベースにも反映する
+    push("persons", [keep]);
+    drop("persons", drops.map((id) => ({ id: id })));
+    push("business_cards", changedCards);
+    push("interactions", changedLogs);
+    drop("person_topics", removedTopicKeys);
+    push("person_topics", keptTopics);
+    drop("relationships", removedRels.map((r) => ({ id: r.id })));
+    push("relationships", keptRels);
+
+    return { ok: ok, merged: drops.length, error: lastError };
+  }
+
+
+  /* --- 専門分野の表記ゆれをまとめる ---------------------------------------- */
+
+  /** 「旋盤」と「旋盤加工」のように、同じものを指していそうな組をさがす */
+  function findTopicDuplicates() {
+    const list = db.topics.slice();
+    const used = {};
+    const groups = [];
+
+    for (let i = 0; i < list.length; i++) {
+      if (used[list[i].id]) continue;
+      const g = [list[i]];
+      const a = fold(list[i].name);
+
+      for (let j = i + 1; j < list.length; j++) {
+        if (used[list[j].id]) continue;
+        const b = fold(list[j].name);
+        const same = (a === b)
+          || (a.length >= 2 && b.length >= 2 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0));
+        if (same) { g.push(list[j]); used[list[j].id] = true; }
+      }
+      if (g.length > 1) { used[list[i].id] = true; groups.push(g); }
+    }
+    return groups;
+  }
+
+  /** 専門分野をひとつにまとめる */
+  function mergeTopics(keepId, dropIds) {
+    const keep = db.topics.find((t) => t.id === keepId);
+    if (!keep) return { ok: false, error: "まとめ先が見つかりません。" };
+
+    const drops = (dropIds || []).filter((id) => id !== keepId);
+    if (!drops.length) return { ok: false, error: "まとめる相手がいません。" };
+
+    const removed = [];
+    db.person_topics.forEach(function (pt) {
+      if (drops.indexOf(pt.topic_id) >= 0) {
+        removed.push({ person_id: pt.person_id, topic_id: pt.topic_id });
+        pt.topic_id = keepId;
+      }
+    });
+
+    const seen = {}, kept = [];
+    db.person_topics = db.person_topics.filter(function (pt) {
+      const k = pt.person_id + "|" + pt.topic_id;
+      if (seen[k]) return false;
+      seen[k] = true;
+      if (pt.topic_id === keepId) kept.push(pt);
+      return true;
+    });
+
+    db.topics = db.topics.filter((t) => drops.indexOf(t.id) < 0);
+    const ok = persist();
+
+    drop("topics", drops.map((id) => ({ id: id })));
+    drop("person_topics", removed);
+    push("person_topics", kept);
+    return { ok: ok, merged: drops.length, error: lastError };
+  }
+
+
+  /* --- 接点の偏り（属人化の度合い）----------------------------------------- */
+
+  /**
+   * 外部の人との接点が、社内の誰にどれだけ偏っているかを数える。
+   * 「その人が抜けたら、何名との接点が失われるか」まで出します。
+   */
+  function getDependencyStats() {
+    const persons = db.persons;
+    const withContact = persons.filter((p) => getUsersWhoKnow(p.id).length > 0);
+    const sole = persons.filter((p) => getUsersWhoKnow(p.id).length === 1);
+    const none = persons.filter((p) => getUsersWhoKnow(p.id).length === 0);
+
+    const perUser = getUsers().map(function (u) {
+      const contacts = getContactsOfUser(u.id);
+      // この人だけが接点を持っている相手
+      const only = contacts.filter(function (p) {
+        const who = getUsersWhoKnow(p.id);
+        return who.length === 1 && who[0].id === u.id;
+      });
+      return { user: u, contacts: contacts.length, only: only.length };
+    }).sort((a, b) => b.contacts - a.contacts);
+
+    return {
+      persons: persons.length,
+      withContact: withContact.length,
+      sole: sole.length,
+      none: none.length,
+      solePct: withContact.length
+        ? Math.round((sole.length / withContact.length) * 100) : 0,
+      perUser: perUser,
+    };
+  }
+
+  /* --- 組織 ---------------------------------------------------------------- */
+
+  /** 組織の詳しい情報。所属者・専門分野・社内の接点をまとめる。 */
+  function getOrganizationDetail(orgId) {
+    const org = db.organizations.find((o) => o.id === orgId);
+    if (!org) return null;
+
+    const members = db.persons.filter((p) => p.organization_id === orgId);
+
+    // 所属者の専門分野を数える
+    const count = {};
+    members.forEach(function (p) {
+      getTopicsOf(p.id).forEach(function (t) {
+        count[t.name] = (count[t.name] || 0) + 1;
+      });
+    });
+    const topics = Object.keys(count)
+      .map((name) => ({ name: name, count: count[name] }))
+      .sort((a, b) => b.count - a.count);
+
+    // 社内でこの組織と接点がある人
+    const whoIds = {};
+    members.forEach(function (p) {
+      getUsersWhoKnow(p.id).forEach((u) => { whoIds[u.id] = true; });
+    });
+
+    // 所属者を通じてつながっている他の組織
+    const linked = {};
+    members.forEach(function (p) {
+      getRelationshipsOf(p.id).forEach(function (r) {
+        const other = getPerson(r.other_id);
+        if (!other || !other.organization_id || other.organization_id === orgId) return;
+        const k = other.organization_id;
+        linked[k] = linked[k] || { id: k, name: getOrganizationName(k), count: 0 };
+        linked[k].count++;
+      });
+    });
+
+    return {
+      org: org,
+      members: members,
+      topics: topics,
+      users: Object.keys(whoIds).map(getUser).filter(Boolean),
+      linked: Object.keys(linked).map((k) => linked[k]).sort((a, b) => b.count - a.count),
+    };
+  }
+
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
@@ -967,6 +1243,11 @@ const Storage = (function () {
     getCardOwner, getContactsOfUser, getUsersWhoKnow,
     enableShared, isShared, applyRemote, noteCardImageId, pushAll,
     findConnectionPath, displayName, relationBetween,
+
+    // 整理（名寄せ・表記ゆれ）と集計
+    findPersonDuplicates, mergePersons,
+    findTopicDuplicates, mergeTopics,
+    getDependencyStats, getOrganizationDetail,
 
     // AI検索のための検索関数（Phase 5）
     searchPeopleByTopic, searchPeopleByAttribute, searchPeopleByInteraction,

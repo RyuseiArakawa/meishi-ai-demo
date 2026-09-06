@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=18">
+<link rel="stylesheet" href="css/style.css?v=19">
 </head>
 <body>
 
@@ -46,7 +46,9 @@
     <li><button class="nav-item" data-screen="dashboard">ダッシュボード</button></li>
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
     <li><button class="nav-item" data-screen="people">人物</button></li>
+    <li><button class="nav-item" data-screen="orgs">組織</button></li>
     <li><button class="nav-item" data-screen="graph">人脈</button></li>
+    <li><button class="nav-item" data-screen="maintain">整理</button></li>
   </ul>
 
   <div class="sidebar-foot">
@@ -108,6 +110,11 @@
         <span class="menu-go">ひらく</span>
       </button>
     </div>
+
+    <section class="block" id="dep-block">
+      <h3>外部との接点の偏り</h3>
+      <div id="dep-body"></div>
+    </section>
 
     <section class="block">
       <h3>最近登録した人物</h3>
@@ -257,6 +264,29 @@
     <div id="people-list"></div>
   </section>
 
+  <!-- ---------- 組織（Phase 6） ---------- -->
+  <section id="screen-orgs" class="screen" hidden>
+    <header class="page-head">
+      <h1>組織</h1>
+      <p>どの組織と、社内の誰が接点を持っているかを見られます。</p>
+    </header>
+    <p class="count" id="orgs-count"></p>
+    <div class="orgs-layout">
+      <div id="orgs-list" class="orgs-list"></div>
+      <div id="orgs-detail" class="orgs-detail"></div>
+    </div>
+  </section>
+
+  <!-- ---------- 整理（Phase 6） ---------- -->
+  <section id="screen-maintain" class="screen" hidden>
+    <header class="page-head">
+      <h1>整理</h1>
+      <p>同じ人物が二重に登録されていないか、専門分野の書き方がばらついていないかを確かめます。
+        まとめるかどうかは、内容を見て人が決めてください。</p>
+    </header>
+    <div id="maintain-body"></div>
+  </section>
+
   <!-- ---------- 人脈グラフ（Phase 4） ---------- -->
   <section id="screen-graph" class="screen" hidden>
     <header class="page-head">
@@ -317,15 +347,17 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=18"></script>
-<script src="js/remote.js?v=18"></script>
-<script src="js/storage.js?v=18"></script>
-<script src="js/gemini.js?v=18"></script>
-<script src="js/pdf.js?v=18"></script>
-<script src="js/app.js?v=18"></script>
-<script src="js/people.js?v=18"></script>
-<script src="js/graph.js?v=18"></script>
-<script src="js/ai-chat.js?v=18"></script>
+<script src="js/config.js?v=19"></script>
+<script src="js/remote.js?v=19"></script>
+<script src="js/storage.js?v=19"></script>
+<script src="js/gemini.js?v=19"></script>
+<script src="js/pdf.js?v=19"></script>
+<script src="js/app.js?v=19"></script>
+<script src="js/people.js?v=19"></script>
+<script src="js/graph.js?v=19"></script>
+<script src="js/orgs.js?v=19"></script>
+<script src="js/maintain.js?v=19"></script>
+<script src="js/ai-chat.js?v=19"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -334,11 +366,14 @@
      中身を直したファイルだけ番号が上がるので、
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
-    "config":  14,
-    "gemini":  14,
-    "app":     14,
-    "graph":   13,
-    "ai-chat": 14
+    "config":   14,
+    "gemini":   14,
+    "storage":  15,
+    "app":      15,
+    "graph":    13,
+    "ai-chat":  14,
+    "orgs":     15,
+    "maintain": 15
   };
 
   var got = window.APP_BUILD || {};

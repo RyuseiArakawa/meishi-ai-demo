@@ -995,3 +995,101 @@ input[type=text], input[type=date], input[type=search], select {
 
 .chat-again { margin-top: 10px; }
 .chat-answer { white-space: pre-wrap; }
+
+/* ===== ダッシュボード：接点の偏り ======================================== */
+
+.dep-lead { font-size: 14.5px; line-height: 1.9; }
+.dep-lead b { font-family: var(--mincho); font-size: 19px; color: var(--accent); }
+.dep-bars { display: flex; flex-direction: column; gap: 8px; }
+.dep-row { display: grid; grid-template-columns: 120px 1fr 200px; gap: 12px; align-items: center; }
+.dep-name { font-family: var(--mincho); font-size: 14.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-bar { position: relative; height: 16px; background: var(--field); border-radius: 2px; }
+.dep-fill { position: absolute; left: 0; top: 0; height: 100%;
+  background: #9fb3c4; border-radius: 2px; }
+.dep-only { position: absolute; left: 0; top: 0; height: 100%;
+  background: var(--accent); border-radius: 2px; }
+.dep-num { font-size: 12.5px; color: var(--ink2); }
+.dep-warn { display: block; font-size: 11.5px; color: var(--accent); }
+@media (max-width: 700px) {
+  .dep-row { grid-template-columns: 90px 1fr; }
+  .dep-num { grid-column: 2; }
+}
+
+/* ===== 組織 ============================================================== */
+
+.orgs-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .orgs-layout { grid-template-columns: 1fr; } }
+
+.orgs-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.orow {
+  appearance: none; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule2); border-radius: 3px; padding: 10px 13px;
+}
+.orow:hover { border-left-color: var(--accent); }
+.orow.is-current { border-left-color: var(--ink); background: var(--ok-bg); }
+.orow-name { display: block; font-family: var(--mincho); font-size: 15px; font-weight: 600; }
+.orow-meta { display: block; font-size: 11.5px; color: var(--muted); }
+
+.orgs-detail { min-width: 0; }
+.odetail { background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 20px 22px; }
+.odetail-name { font-family: var(--mincho); font-size: 23px; font-weight: 600; margin: 0; }
+.odetail-meta { font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+.odetail h3 { margin-top: 16px; }
+
+.omembers { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.omember {
+  appearance: none; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--field); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 8px 12px;
+}
+.omember:hover { background: var(--paper); border-color: var(--rule2); }
+.omember-name { display: block; font-family: var(--mincho); font-size: 14.5px; font-weight: 600; }
+.omember-meta { display: block; font-size: 11.5px; color: var(--muted); }
+.sole-tag {
+  font-family: var(--gothic); font-size: 10px; font-weight: 400;
+  color: #8a6420; background: #fbf3e3; border: 1px solid #e3d0a6;
+  border-radius: 2px; padding: 0 5px; margin-left: 7px;
+}
+
+.olinks { display: flex; flex-wrap: wrap; gap: 7px; }
+.olink {
+  appearance: none; font: inherit; color: var(--ink2); cursor: pointer;
+  background: var(--paper); border: 1px solid var(--rule2);
+  border-radius: 14px; padding: 4px 12px; font-size: 12.5px;
+}
+.olink:hover { border-color: var(--accent); color: var(--accent); }
+.olink span { color: var(--muted); margin-left: 6px; font-size: 11px; }
+
+/* ===== 整理（名寄せ・表記ゆれ） ========================================== */
+
+.mgroup {
+  border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+  border-radius: 0 3px 3px 0; padding: 12px 15px; margin-bottom: 12px;
+  background: var(--field);
+}
+.mgroup-head { font-size: 12px; color: var(--ink2); margin-bottom: 8px; }
+.mrow {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 9px 12px; margin-bottom: 6px; cursor: pointer;
+}
+.mrow:hover { border-color: var(--rule2); }
+.mrow input { margin-top: 4px; accent-color: var(--ink); }
+.mrow-body { min-width: 0; }
+.mrow-name { display: block; font-family: var(--mincho); font-size: 16px; font-weight: 600; }
+.mrow-meta { display: block; font-size: 12.5px; color: var(--ink2); }
+.mrow-sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.mgroup-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.mgroup-foot .note { margin: 0; font-size: 11.5px; }
+
+.tchoice { display: flex; flex-wrap: wrap; gap: 8px; }
+.trow {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 6px 12px; cursor: pointer; font-size: 14px;
+}
+.trow input { accent-color: var(--ink); }
+.trow-n { font-size: 11px; color: var(--muted); }
