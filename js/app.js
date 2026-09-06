@@ -47,7 +47,7 @@
      画面の切り替え
      ========================================================================= */
 
-  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person"];
+  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person", "graph"];
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -65,6 +65,7 @@
     if (name === "capture") resetCapture();
     if (name === "people") People.enter();
     if (name === "person") People.renderDetail(id);
+    if (name === "graph") Graph.enter();
 
     window.scrollTo(0, 0);
   }

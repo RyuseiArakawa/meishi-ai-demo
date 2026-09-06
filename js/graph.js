@@ -1,0 +1,518 @@
+/* =============================================================================
+   人脈グラフ（Phase 4）
+
+     人物をノード（丸）、関係をエッジ（線）として図に描きます。
+
+   外部の描画ライブラリは使っていません。
+   ・配置は「ばねと反発」による簡単な計算で決めています
+   ・図はSVGという、文字で書ける図形の形式で作っています
+   GitHub Pages にファイルを置くだけで動かすためです。
+
+   設計上の約束（設計書 §9）：
+     線が引かれるのは、人が登録した関係だけです。
+     同じ組織にいる、同じ学会に出た、というだけで線は引きません。
+     線の太さは「関係の強さ」であって、システムが測った親しさではありません。
+   ============================================================================= */
+
+const Graph = (function () {
+
+  const esc = UI.esc;
+  const $ = UI.$;
+
+  const VIEW_W = 900;
+  const VIEW_H = 620;
+
+  // 組織ごとの色。順番に割り当てる。
+  const ORG_COLORS = [
+    "#2f5d8c", "#2b6b53", "#a9622a", "#7a4a86", "#a93a2a",
+    "#3d6f74", "#8a6420", "#5a5f8c", "#6b7a3a", "#8c4a5e",
+  ];
+
+  let state = {
+    nodes: [],        // { id, name, org, orgId, x, y, degree }
+    links: [],        // { a, b, type, strength, source, notes }
+    selected: null,   // 選ばれている人物のID
+    minStrength: 1,   // これ未満の関係は線を引かない
+    showIsolated: true,
+    pathFrom: "",
+    pathTo: "",
+    pathIds: [],      // 経路上の人物ID
+    pathLinks: [],    // 経路上の関係のキー
+    message: "",
+  };
+
+  const nodeById = (id) => state.nodes.find((n) => n.id === id);
+  const linkKey = (a, b) => [a, b].sort().join("|");
+
+
+  /* =========================================================================
+     画面に入ったとき
+     ========================================================================= */
+
+  function enter() {
+    build();
+    render();
+  }
+
+  /** 保存されているデータから、図に描く材料を組み立てる */
+  function build() {
+    const persons = Storage.searchPersons("", "", "name");
+    const orgIds = [];
+    persons.forEach(function (p) {
+      if (p.organization_id && orgIds.indexOf(p.organization_id) < 0) {
+        orgIds.push(p.organization_id);
+      }
+    });
+
+    // 前の配置を覚えておき、同じ人物は同じ場所から始める
+    const prev = {};
+    state.nodes.forEach((n) => { prev[n.id] = { x: n.x, y: n.y }; });
+
+    state.nodes = persons.map(function (p, i) {
+      const angle = (i / Math.max(1, persons.length)) * Math.PI * 2;
+      const start = prev[p.id] || {
+        x: VIEW_W / 2 + Math.cos(angle) * 180,
+        y: VIEW_H / 2 + Math.sin(angle) * 180,
+      };
+      return {
+        id: p.id,
+        name: p.name,
+        orgId: p.organization_id,
+        org: Storage.getOrganizationName(p.organization_id),
+        colorIndex: p.organization_id ? orgIds.indexOf(p.organization_id) : -1,
+        x: start.x, y: start.y, vx: 0, vy: 0, degree: 0,
+      };
+    });
+
+    // 関係を、重複しない形で取り出す
+    const seen = {};
+    state.links = [];
+    persons.forEach(function (p) {
+      Storage.getRelationshipsOf(p.id).forEach(function (r) {
+        const key = linkKey(p.id, r.other_id) + "|" + r.relationship_type;
+        if (seen[key]) return;
+        if (!nodeById(r.other_id)) return;          // 相手が消えている場合は描かない
+        seen[key] = true;
+        state.links.push({
+          a: r.from_person_id, b: r.to_person_id,
+          type: r.relationship_type,
+          label: Storage.relationshipLabel(r.relationship_type),
+          strength: r.strength || 1,
+          source: r.source, notes: r.notes,
+          directed: Storage.isDirected(r.relationship_type),
+        });
+      });
+    });
+
+    // つながっている本数を数える（丸の大きさに使う）
+    state.links.forEach(function (l) {
+      const na = nodeById(l.a), nb = nodeById(l.b);
+      if (na) na.degree++;
+      if (nb) nb.degree++;
+    });
+
+    simulate();
+  }
+
+  /* -------------------------------------------------------------------------
+     配置の計算
+
+     ・つながっている人どうしは、ばねで引き寄せる（強い関係ほど近く）
+     ・すべての人どうしは、反発させて重ならないようにする
+     ・全体が中央に集まるよう、弱く引き寄せる
+     この3つを何度も繰り返すと、自然に見える配置に落ち着きます。
+     ------------------------------------------------------------------------- */
+  function simulate(steps) {
+    const nodes = state.nodes;
+    const links = visibleLinks();
+    const n = nodes.length;
+    if (!n) return;
+
+    for (let step = 0; step < (steps || 320); step++) {
+      const cooling = 1 - step / (steps || 320);      // だんだん動きを小さくする
+
+      // 反発
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const a = nodes[i], b = nodes[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let d2 = dx * dx + dy * dy;
+          if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
+          const d = Math.sqrt(d2);
+          const force = 9000 / d2;
+          const fx = (dx / d) * force, fy = (dy / d) * force;
+          a.vx -= fx; a.vy -= fy;
+          b.vx += fx; b.vy += fy;
+        }
+      }
+
+      // ばね（関係が強いほど、短く保とうとする）
+      links.forEach(function (l) {
+        const a = nodeById(l.a), b = nodeById(l.b);
+        if (!a || !b) return;
+        const rest = 190 - l.strength * 16;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+        const force = (d - rest) * 0.05;
+        const fx = (dx / d) * force, fy = (dy / d) * force;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      });
+
+      // 中央へ寄せる
+      nodes.forEach(function (nd) {
+        nd.vx += (VIEW_W / 2 - nd.x) * 0.012;
+        nd.vy += (VIEW_H / 2 - nd.y) * 0.012;
+      });
+
+      // 動かす
+      nodes.forEach(function (nd) {
+        nd.x += nd.vx * 0.4 * cooling;
+        nd.y += nd.vy * 0.4 * cooling;
+        nd.vx *= 0.82; nd.vy *= 0.82;
+        const m = 46;
+        nd.x = Math.max(m, Math.min(VIEW_W - m, nd.x));
+        nd.y = Math.max(m, Math.min(VIEW_H - m, nd.y));
+      });
+    }
+  }
+
+  function visibleLinks() {
+    return state.links.filter((l) => (l.strength || 1) >= state.minStrength);
+  }
+
+  function visibleNodes() {
+    if (state.showIsolated) return state.nodes;
+    const used = {};
+    visibleLinks().forEach((l) => { used[l.a] = true; used[l.b] = true; });
+    return state.nodes.filter((n) => used[n.id]);
+  }
+
+
+  /* =========================================================================
+     経路をさがす（最短で何人はさむか）
+     ========================================================================= */
+
+  function findPath(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return null;
+
+    const adj = {};
+    visibleLinks().forEach(function (l) {
+      (adj[l.a] = adj[l.a] || []).push(l.b);
+      (adj[l.b] = adj[l.b] || []).push(l.a);
+    });
+
+    // 幅優先探索。近いところから順に調べるので、最初に着いた道が最短になる。
+    const prev = {}; const seen = {}; const queue = [fromId];
+    seen[fromId] = true;
+
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur === toId) {
+        const path = [cur];
+        while (prev[path[0]]) path.unshift(prev[path[0]]);
+        return path;
+      }
+      (adj[cur] || []).forEach(function (next) {
+        if (seen[next]) return;
+        seen[next] = true;
+        prev[next] = cur;
+        queue.push(next);
+      });
+    }
+    return null;
+  }
+
+  function applyPath() {
+    state.pathIds = [];
+    state.pathLinks = [];
+    state.message = "";
+
+    if (!state.pathFrom || !state.pathTo) return;
+
+    const path = findPath(state.pathFrom, state.pathTo);
+    if (!path) {
+      state.message = "登録されている関係では、この2人はつながっていません。";
+      return;
+    }
+    state.pathIds = path;
+    for (let i = 0; i < path.length - 1; i++) {
+      state.pathLinks.push(linkKey(path[i], path[i + 1]));
+    }
+
+    const via = path.slice(1, -1).map((id) => (nodeById(id) || {}).name);
+    state.message = via.length
+      ? "間に " + via.length + " 人：" + path.map((id) => (nodeById(id) || {}).name).join(" → ")
+      : "直接つながっています：" + path.map((id) => (nodeById(id) || {}).name).join(" → ");
+  }
+
+
+  /* =========================================================================
+     描く
+     ========================================================================= */
+
+  function render() {
+    renderControls();
+    renderCanvas();
+    renderPanel();
+  }
+
+  function renderControls() {
+    const persons = state.nodes;
+    const options = (selected) =>
+      '<option value="">選んでください</option>'
+      + persons.map((n) =>
+          '<option value="' + n.id + '"' + (selected === n.id ? " selected" : "") + ">"
+          + esc(n.name) + (n.org ? "（" + esc(n.org) + "）" : "") + "</option>").join("");
+
+    $("graph-controls").innerHTML =
+        '<div class="gctl">'
+      +   '<label for="g-strength">表示する関係</label>'
+      +   '<select id="g-strength" class="select">'
+      +     [1, 2, 3, 4, 5].map((v) =>
+            '<option value="' + v + '"' + (state.minStrength === v ? " selected" : "") + ">"
+            + (v === 1 ? "すべて" : "強さ " + v + " 以上") + "</option>").join("")
+      +   "</select>"
+      + "</div>"
+      + '<div class="gctl">'
+      +   '<label><input type="checkbox" id="g-isolated"'
+      +     (state.showIsolated ? " checked" : "") + "> 関係のない人物も表示</label>"
+      + "</div>"
+      + '<div class="gctl gctl-path">'
+      +   '<label for="g-from">経路をさがす</label>'
+      +   '<select id="g-from" class="select">' + options(state.pathFrom) + "</select>"
+      +   '<span class="gctl-arrow">→</span>'
+      +   '<select id="g-to" class="select">' + options(state.pathTo) + "</select>"
+      +   '<button class="btn btn-sm" id="g-clear">解除</button>'
+      + "</div>";
+
+    $("g-strength").addEventListener("change", function () {
+      state.minStrength = Number(this.value);
+      applyPath();
+      simulate(180);
+      render();
+    });
+    $("g-isolated").addEventListener("change", function () {
+      state.showIsolated = this.checked;
+      render();
+    });
+    $("g-from").addEventListener("change", function () {
+      state.pathFrom = this.value; applyPath(); render();
+    });
+    $("g-to").addEventListener("change", function () {
+      state.pathTo = this.value; applyPath(); render();
+    });
+    $("g-clear").addEventListener("click", function () {
+      state.pathFrom = ""; state.pathTo = "";
+      state.pathIds = []; state.pathLinks = []; state.message = "";
+      render();
+    });
+  }
+
+  function renderCanvas() {
+    const nodes = visibleNodes();
+    const visibleIds = {};
+    nodes.forEach((n) => { visibleIds[n.id] = true; });
+    const links = visibleLinks().filter((l) => visibleIds[l.a] && visibleIds[l.b]);
+
+    if (!state.nodes.length) {
+      $("graph-canvas").innerHTML =
+        '<div class="empty-box"><p>まだ人物が登録されていません。</p>'
+        + '<button class="btn" data-screen="capture">名刺を登録する</button></div>';
+      return;
+    }
+    if (!state.links.length) {
+      $("graph-canvas").innerHTML =
+        '<div class="empty-box"><p>まだ関係が登録されていません。</p>'
+        + "<p class=\"note\">人物の画面をひらき、「人物同士の関係」から登録してください。</p>"
+        + '<button class="btn" data-screen="people">人物一覧へ</button></div>';
+      return;
+    }
+
+    const onPath = {};
+    state.pathIds.forEach((id) => { onPath[id] = true; });
+    const dim = state.pathIds.length > 0;   // 経路を表示中は、それ以外を薄くする
+
+    // --- 線 ---
+    const edges = links.map(function (l) {
+      const a = nodeById(l.a), b = nodeById(l.b);
+      const key = linkKey(l.a, l.b);
+      const isPath = state.pathLinks.indexOf(key) >= 0;
+      const cls = "edge" + (isPath ? " is-path" : (dim ? " is-dim" : ""));
+      const title = esc(a.name) + " ― " + esc(b.name) + "　"
+        + esc(l.label) + "　強さ" + l.strength
+        + (l.source ? "　根拠：" + esc(l.source) : "");
+      return '<g class="' + cls + '">'
+        + "<title>" + title + "</title>"
+        + '<line x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) + '"'
+        + ' x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '"'
+        + ' stroke-width="' + (0.8 + l.strength * 0.9).toFixed(1) + '"'
+        + (l.strength <= 2 ? ' stroke-dasharray="5 4"' : "")
+        + "></line></g>";
+    }).join("");
+
+    // --- 丸と名前 ---
+    const circles = nodes.map(function (n) {
+      const r = 13 + Math.min(9, n.degree * 1.6);
+      const color = n.colorIndex >= 0 ? ORG_COLORS[n.colorIndex % ORG_COLORS.length] : "#8a949c";
+      const cls = "node"
+        + (state.selected === n.id ? " is-selected" : "")
+        + (onPath[n.id] ? " is-path" : (dim ? " is-dim" : ""));
+      return '<g class="' + cls + '" data-node="' + n.id + '"'
+        + ' transform="translate(' + n.x.toFixed(1) + "," + n.y.toFixed(1) + ')">'
+        + "<title>" + esc(n.name) + (n.org ? "（" + esc(n.org) + "）" : "")
+        + "　関係 " + n.degree + " 件</title>"
+        + '<circle r="' + r + '" fill="' + color + '"></circle>'
+        + '<text y="' + (r + 15) + '" text-anchor="middle">' + esc(n.name) + "</text>"
+        + "</g>";
+    }).join("");
+
+    $("graph-canvas").innerHTML =
+        '<svg viewBox="0 0 ' + VIEW_W + " " + VIEW_H + '" class="graph-svg"'
+      + ' role="img" aria-label="人物の関係図">'
+      + '<g class="edges">' + edges + "</g>"
+      + '<g class="nodes">' + circles + "</g>"
+      + "</svg>";
+
+    wireCanvas();
+  }
+
+  /** 丸を押して選ぶ、引きずって動かす */
+  function wireCanvas() {
+    const svg = $("graph-canvas").querySelector("svg");
+    if (!svg) return;
+
+    let dragging = null;
+    let moved = false;
+
+    function toSvgPoint(evt) {
+      const rect = svg.getBoundingClientRect();
+      return {
+        x: ((evt.clientX - rect.left) / rect.width) * VIEW_W,
+        y: ((evt.clientY - rect.top) / rect.height) * VIEW_H,
+      };
+    }
+
+    svg.querySelectorAll("[data-node]").forEach(function (g) {
+      g.addEventListener("pointerdown", function (e) {
+        dragging = nodeById(g.dataset.node);
+        moved = false;
+        g.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+
+      g.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        const p = toSvgPoint(e);
+        dragging.x = p.x; dragging.y = p.y;
+        moved = true;
+        renderCanvas();          // 位置が変わったので描き直す
+      });
+
+      g.addEventListener("pointerup", function (e) {
+        if (dragging && !moved) {
+          state.selected = dragging.id;
+          renderCanvas();
+          renderPanel();
+        }
+        dragging = null;
+      });
+    });
+  }
+
+  /* --- 右側の詳細パネル ---------------------------------------------------- */
+
+  function renderPanel() {
+    const box = $("graph-panel");
+
+    // 経路の説明があれば、まず出す
+    let head = "";
+    if (state.message) {
+      head = '<div class="alert ' + (state.pathIds.length ? "alert-ok" : "alert-warn") + '">'
+        + esc(state.message) + "</div>";
+    }
+
+    if (!state.selected) {
+      box.innerHTML = head + legendHtml()
+        + '<p class="note">丸を押すと、その人物の関係を表示します。'
+        + "引きずると位置を動かせます。</p>";
+      return;
+    }
+
+    const p = Storage.getPerson(state.selected);
+    if (!p) { state.selected = null; box.innerHTML = head + legendHtml(); return; }
+
+    const rels = Storage.getRelationshipsOf(p.id);
+    const topics = Storage.getTopicsOf(p.id);
+
+    box.innerHTML = head
+      + '<div class="gp-head">'
+      +   '<div class="gp-name">' + esc(p.name) + "</div>"
+      +   '<div class="gp-meta">'
+      +     esc([Storage.getOrganizationName(p.organization_id), p.department, p.job_title]
+            .filter(Boolean).join("　／　") || "所属情報なし") + "</div>"
+      + "</div>"
+      + (topics.length
+        ? '<div class="chips" style="margin-bottom:12px">'
+          + topics.map((t) => '<span class="chip">' + esc(t.name) + "</span>").join("")
+          + "</div>"
+        : "")
+      + "<h3>登録されている関係（" + rels.length + "）</h3>"
+      + (rels.length
+        ? '<ul class="gp-rels">' + rels.map(function (r) {
+            const other = Storage.getPerson(r.other_id);
+            return "<li>"
+              + '<span class="rel-type">' + esc(Storage.relationshipLabel(r.relationship_type)) + "</span>"
+              + '<button class="linkbtn gp-rel-name" data-pick="' + r.other_id + '">'
+              +   esc(other ? other.name : "?") + "</button>"
+              + '<span class="dots">' + "●".repeat(r.strength || 0)
+              +   '<span class="dots-off">' + "●".repeat(5 - (r.strength || 0)) + "</span></span>"
+              + '<div class="rel-src">根拠：' + esc(r.source || "（未記入）") + "</div>"
+              + "</li>";
+          }).join("") + "</ul>"
+        : '<p class="empty">ありません。</p>')
+      + '<div class="btn-row">'
+      +   '<button class="btn btn-sm" data-screen="person" data-id="' + p.id + '">人物の画面をひらく</button>'
+      +   '<button class="btn btn-sm" id="gp-from">ここを経路の起点にする</button>'
+      + "</div>"
+      + legendHtml();
+
+    box.querySelectorAll("[data-pick]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        state.selected = b.dataset.pick;
+        renderCanvas(); renderPanel();
+      });
+    });
+    const from = $("gp-from");
+    if (from) from.addEventListener("click", function () {
+      state.pathFrom = p.id;
+      applyPath();
+      render();
+    });
+  }
+
+  function legendHtml() {
+    const orgs = [];
+    state.nodes.forEach(function (n) {
+      if (n.colorIndex >= 0 && !orgs.some((o) => o.i === n.colorIndex)) {
+        orgs.push({ i: n.colorIndex, name: n.org });
+      }
+    });
+    orgs.sort((a, b) => a.i - b.i);
+
+    return '<div class="gp-legend">'
+      + "<h3>凡例</h3>"
+      + '<div class="lg-row"><span class="lg-line lg-thin"></span>強さ1〜2（点線）</div>'
+      + '<div class="lg-row"><span class="lg-line lg-thick"></span>強さ3〜5（実線・太いほど強い）</div>'
+      + '<p class="note" style="margin:6px 0 10px">'
+      +   "線の太さは、人が登録した「関係の強さ」です。"
+      +   "システムが親しさを判定したものではありません。</p>"
+      + '<div class="lg-orgs">' + orgs.map((o) =>
+          '<div class="lg-row"><span class="lg-dot" style="background:'
+          + ORG_COLORS[o.i % ORG_COLORS.length] + '"></span>' + esc(o.name) + "</div>").join("")
+      + "</div></div>";
+  }
+
+
+  return { enter: enter };
+})();

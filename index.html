@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
@@ -25,13 +25,13 @@
     <li><button class="nav-item" data-screen="dashboard">ダッシュボード</button></li>
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
     <li><button class="nav-item" data-screen="people">人物</button></li>
-    <li><button class="nav-item is-locked" disabled>人脈<span class="phase">Phase 4</span></button></li>
+    <li><button class="nav-item" data-screen="graph">人脈</button></li>
     <li><button class="nav-item is-locked" disabled>AI検索<span class="phase">Phase 5</span></button></li>
   </ul>
 
   <div class="sidebar-foot">
     <div id="conn" class="conn conn-unknown">接続を確認中…</div>
-    <p>デモ版 Phase 3<br>架空の名刺で操作してください</p>
+    <p>デモ版 Phase 4<br>架空の名刺で操作してください</p>
   </div>
 </nav>
 
@@ -67,10 +67,11 @@
         <p>登録した人物を探し、専門分野や交流の記録を書き足します。</p>
         <span class="menu-go">ひらく</span>
       </button>
-      <div class="menu-card is-locked">
-        <h2>人脈<span class="phase">Phase 4</span></h2>
-        <p>人物をノード、関係をエッジとして、つながりを図で表示します。</p>
-      </div>
+      <button class="menu-card" data-screen="graph">
+        <h2>人脈</h2>
+        <p>人物をノード、関係をエッジとして図に表示します。2人の間の経路も探せます。</p>
+        <span class="menu-go">ひらく</span>
+      </button>
       <div class="menu-card is-locked">
         <h2>AI検索<span class="phase">Phase 5</span></h2>
         <p>「旋盤加工について相談できる人は」といった質問に、登録情報だけを根拠に答えます。</p>
@@ -214,6 +215,21 @@
     <div id="people-list"></div>
   </section>
 
+  <!-- ---------- 人脈グラフ（Phase 4） ---------- -->
+  <section id="screen-graph" class="screen" hidden>
+    <header class="page-head">
+      <h1>人脈</h1>
+      <p>線が引かれているのは、人が登録した関係だけです。同じ組織にいるというだけでは線を引きません。</p>
+    </header>
+
+    <div class="controls graph-controls" id="graph-controls"></div>
+
+    <div class="graph-layout">
+      <div id="graph-canvas" class="graph-canvas"></div>
+      <aside id="graph-panel" class="graph-panel"></aside>
+    </div>
+  </section>
+
   <!-- ---------- 人物詳細（Phase 2） ---------- -->
   <section id="screen-person" class="screen" hidden>
     <p class="backline"><button class="linkbtn" data-screen="people">← 人物一覧へもどる</button></p>
@@ -222,11 +238,12 @@
 
 </main>
 
-<script src="js/config.js?v=4"></script>
-<script src="js/storage.js?v=4"></script>
-<script src="js/gemini.js?v=4"></script>
-<script src="js/pdf.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
-<script src="js/people.js?v=4"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/storage.js?v=5"></script>
+<script src="js/gemini.js?v=5"></script>
+<script src="js/pdf.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
+<script src="js/people.js?v=5"></script>
+<script src="js/graph.js?v=5"></script>
 </body>
 </html>

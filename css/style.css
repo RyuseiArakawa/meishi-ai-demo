@@ -523,3 +523,64 @@ input[type=text], input[type=date], input[type=search], select {
   .rel-form-row { grid-template-columns: 1fr; gap: 3px; }
   .rel-actions { position: static; margin-top: 6px; }
 }
+
+/* ===== 人脈グラフ（Phase 4） ============================================= */
+
+.graph-controls { align-items: center; }
+.gctl { display: flex; align-items: center; gap: 8px; }
+.gctl > label { font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
+.gctl input[type=checkbox] { accent-color: var(--ink); margin-right: 4px; }
+.gctl-path { gap: 6px; flex-wrap: wrap; }
+.gctl-path .select { min-width: 150px; }
+.gctl-arrow { color: var(--muted); }
+
+.graph-layout { display: grid; grid-template-columns: 1fr 310px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .graph-layout { grid-template-columns: 1fr; } }
+
+.graph-canvas {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; overflow: hidden;
+}
+.graph-svg { display: block; width: 100%; height: auto; touch-action: none; }
+
+.edge line { stroke: #97a3ac; }
+.edge.is-dim line { stroke: #dfe4e7; }
+.edge.is-path line { stroke: var(--accent); stroke-width: 4 !important; stroke-dasharray: none !important; }
+
+.node { cursor: grab; }
+.node:active { cursor: grabbing; }
+.node circle { stroke: #ffffff; stroke-width: 2; transition: none; }
+.node text {
+  font-family: var(--gothic); font-size: 13px; fill: var(--ink);
+  paint-order: stroke; stroke: #ffffff; stroke-width: 3.5px; stroke-linejoin: round;
+  pointer-events: none;
+}
+.node.is-selected circle { stroke: var(--ink); stroke-width: 3.5; }
+.node.is-dim { opacity: .28; }
+.node.is-path circle { stroke: var(--accent); stroke-width: 3.5; }
+
+.graph-panel {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 16px 18px; font-size: 14px;
+}
+.graph-panel .alert { margin-bottom: 14px; }
+.alert-ok { background: var(--ok-bg); border-left: 3px solid var(--ok); color: #1e5240; }
+
+.gp-head { border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 12px; }
+.gp-name { font-family: var(--mincho); font-size: 20px; font-weight: 600; }
+.gp-meta { font-size: 12px; color: var(--ink2); }
+
+.gp-rels { list-style: none; margin: 0 0 4px; padding: 0; }
+.gp-rels li { border-bottom: 1px solid var(--rule); padding: 8px 0; }
+.gp-rels li:last-child { border-bottom: 0; }
+.gp-rel-name { font-size: 14px; margin: 0 8px; }
+.gp-rels .rel-type { display: inline-block; }
+.gp-rels .rel-src { margin-top: 2px; }
+
+.gp-legend { border-top: 1px solid var(--rule); margin-top: 16px; padding-top: 14px; }
+.lg-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); margin-bottom: 4px; }
+.lg-line { width: 26px; flex: none; }
+.lg-thin { border-top: 2px dashed #97a3ac; }
+.lg-thick { border-top: 4px solid #97a3ac; }
+.lg-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.lg-orgs { margin-top: 8px; }
