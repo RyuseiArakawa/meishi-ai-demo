@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 13;
+
 /* =============================================================================
    AIチャット（Phase 5）
 
@@ -26,10 +29,56 @@ const AIChat = (function () {
     "松本さんを紹介してもらうには誰に頼めばいい？",
   ];
 
+  /* 「何ができるか」への答え。
+     これは登録データと関係のない、このシステム自身の説明なので、
+     AIには聞かずにここで返します。毎回同じ内容を確実に返せます。 */
+  const HELP_RE = /何ができ|なにができ|出来る事|できること|できる事|使い方|つかいかた|機能|ヘルプ|help|どんな質問/i;
+
+  const HELP_TEXT =
+      "登録されている名刺の情報をもとに、次のことをお答えできます。\n\n"
+    + "● 人を探す\n"
+    + "　「旋盤加工に詳しい人は？」のように、専門分野・組織・役職から探せます。\n\n"
+    + "● つながりを調べる\n"
+    + "　「荒川さんとはどんなつながり？」「松本さんを紹介してもらうには？」\n"
+    + "　経路が見つかると、図でお見せします。\n\n"
+    + "● 社内の誰が接点を持つか\n"
+    + "　その人の名刺を登録した社内の人をお伝えします。\n\n"
+    + "● 交流の記録\n"
+    + "　「いつ、どこで会ったか」の記録から探せます。\n\n"
+    + "できないこと\n"
+    + "　登録されていないことは答えられません。推測もしません。\n"
+    + "　メールアドレス・電話番号・住所はAIに渡していません。";
+
   let open = false;
   let busy = false;
   let messages = [];        // { role, text, data }
-  let seq = 0;
+  let lastPersons = [];     // 直前の回答に出てきた人物（次の候補づくりに使う）
+
+  /** 入力欄の上に出す質問候補 */
+  function suggestions() {
+    const out = [];
+
+    // 直前の回答に人が出ていれば、その人についての続きを勧める
+    lastPersons.slice(0, 2).forEach(function (id) {
+      const p = Storage.getPerson(id);
+      if (p) {
+        const nm = String(p.name).split(/[ 　]/)[0];
+        out.push(nm + "さんとはどんなつながり？");
+        out.push(nm + "さんを紹介してもらうには？");
+      }
+    });
+
+    // 登録されている専門分野から、実際に答えが出るものを選ぶ
+    const topics = Storage.getAllTopics();
+    for (let i = 0; i < topics.length && out.length < 4; i++) {
+      const t = topics[(i * 7 + messages.length) % topics.length];
+      const q = t.name + "に詳しい人は？";
+      if (out.indexOf(q) < 0) out.push(q);
+    }
+
+    // この1つは必ず残す（何を聞けるか分からないときの入口になるため）
+    return out.slice(0, 4).concat(["何ができますか？"]);
+  }
 
 
   /* =========================================================================
@@ -41,6 +90,7 @@ const AIChat = (function () {
   function show() {
     open = true;
     $("chat-panel").hidden = false;
+    applyLayout();
     $("chat-fab").classList.add("is-open");
     render();
     setTimeout(function () { const i = $("chat-input"); if (i) i.focus(); }, 60);
@@ -77,6 +127,11 @@ const AIChat = (function () {
     }
 
     log.scrollTop = log.scrollHeight;
+
+    // 入力欄の上の質問候補
+    $("chat-suggest").innerHTML = busy ? "" : suggestions()
+      .map((q, i) => '<button class="sg" data-sg="' + i + '">' + esc(q) + "</button>").join("");
+
     wire();
   }
 
@@ -139,6 +194,10 @@ const AIChat = (function () {
           +   "メール・電話・住所は渡していません（設計書 §21）。</div>"
           + "</div></details>"
         : "")
+      + (m.q && !(m.data && m.data.help)
+        ? '<div class="chat-again"><button class="chat-link" data-again="'
+          + esc(m.q) + '">もう一度聞く</button></div>'
+        : "")
       + "</div></div>";
   }
 
@@ -147,6 +206,16 @@ const AIChat = (function () {
 
     log.querySelectorAll("[data-ex]").forEach(function (b) {
       b.addEventListener("click", function () { send(EXAMPLES[Number(b.dataset.ex)]); });
+    });
+
+    const sg = suggestions();
+    $("chat-suggest").querySelectorAll("[data-sg]").forEach(function (b) {
+      b.addEventListener("click", function () { send(sg[Number(b.dataset.sg)]); });
+    });
+
+    // 同じ質問をもう一度送る
+    log.querySelectorAll("[data-again]").forEach(function (b) {
+      b.addEventListener("click", function () { send(b.dataset.again, true); });
     });
     log.querySelectorAll("[data-person]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -217,12 +286,36 @@ const AIChat = (function () {
 
   const CONNECTION_WORDS = /つながり|繋がり|関係|紹介|経由|たどり|知って|会う|会い|コンタクト|接点/;
 
-  async function send(question) {
+  /**
+   * 質問を送る。
+   * @param question  質問文
+   * @param again     true なら「もう一度」。質問は増やさず、答えだけを作り直す。
+   */
+  async function send(question, again) {
     const q = String(question || "").trim();
     if (!q || busy) return;
 
-    messages.push({ role: "user", text: q });
+    if (again) {
+      // 直前の答えを取り除いて、同じ質問で作り直す
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant" && messages[i].q === q) {
+          messages.splice(i, 1);
+          break;
+        }
+      }
+    } else {
+      messages.push({ role: "user", text: q });
+    }
     $("chat-input").value = "";
+
+    // 「何ができるか」は、このシステム自身の説明なのでAIを呼ばない
+    if (HELP_RE.test(q)) {
+      messages.push({ role: "assistant", text: HELP_TEXT, q: q, data: { help: true } });
+      lastPersons = [];
+      render();
+      return;
+    }
+
     busy = true;
     render();
 
@@ -253,9 +346,12 @@ const AIChat = (function () {
         }
       }
 
+      lastPersons = persons.map((x) => x.person_id);
+
       messages.push({
         role: "assistant",
         text: ans.answer || "登録情報からは判断できません。",
+        q: q,
         data: {
           insufficient: ans.insufficient === true,
           persons: persons,
@@ -268,7 +364,8 @@ const AIChat = (function () {
       });
 
     } catch (err) {
-      messages.push({ role: "assistant", text: "うまくいきませんでした：" + err.message, data: {} });
+      messages.push({ role: "assistant",
+        text: "うまくいきませんでした：" + err.message, q: q, data: {} });
     }
 
     busy = false;
@@ -309,7 +406,120 @@ const AIChat = (function () {
      組み立て
      ========================================================================= */
 
+  /* =========================================================================
+     窓の位置と大きさ
+
+     見出しをつかむと移動、右下の角をつかむと大きさを変えられます。
+     指定した位置と大きさは覚えておき、次に開いたときも同じにします。
+     画面が狭いときは全画面にするので、移動も大きさ変更もしません。
+     ========================================================================= */
+
+  const LAYOUT_KEY = "meishi_chat_layout_v1";
+  const MIN_W = 320, MIN_H = 360;
+
+  const isNarrow = () => window.innerWidth <= 700;
+
+  function loadLayout() {
+    try {
+      const raw = localStorage.getItem(LAYOUT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+  function saveLayout(l) {
+    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch (e) {}
+  }
+
+  let layout = loadLayout();
+
+  /** 画面からはみ出さないように直す */
+  function clampLayout(l) {
+    l.w = Math.max(MIN_W, Math.min(l.w, window.innerWidth - 16));
+    l.h = Math.max(MIN_H, Math.min(l.h, window.innerHeight - 16));
+    l.left = Math.max(8, Math.min(l.left, window.innerWidth - l.w - 8));
+    l.top = Math.max(8, Math.min(l.top, window.innerHeight - l.h - 8));
+    return l;
+  }
+
+  function applyLayout() {
+    const el = $("chat-panel");
+    if (isNarrow()) {
+      // 画面が狭いときは全画面。指定は消さずに残しておく。
+      el.style.left = ""; el.style.top = "";
+      el.style.width = ""; el.style.height = "";
+      el.classList.remove("is-placed");
+      return;
+    }
+    if (!layout) {
+      layout = {
+        w: 400, h: Math.min(620, window.innerHeight - 130),
+        left: window.innerWidth - 400 - 22,
+        top: Math.max(12, window.innerHeight - 620 - 88),
+      };
+    }
+    clampLayout(layout);
+    el.classList.add("is-placed");
+    el.style.left = layout.left + "px";
+    el.style.top = layout.top + "px";
+    el.style.width = layout.w + "px";
+    el.style.height = layout.h + "px";
+  }
+
+  function initWindow() {
+    const panel = $("chat-panel");
+    const head = $("chat-head");
+    const grip = $("chat-resize");
+    let mode = null, start = null;
+
+    function begin(kind, e) {
+      if (isNarrow()) return;
+      applyLayout();
+      mode = kind;
+      start = { x: e.clientX, y: e.clientY,
+                left: layout.left, top: layout.top, w: layout.w, h: layout.h };
+      panel.classList.add("is-moving");
+      if (panel.setPointerCapture) panel.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+
+    head.addEventListener("pointerdown", function (e) {
+      // ボタンを押したときは動かさない
+      if (e.target.closest("button")) return;
+      begin("move", e);
+    });
+    grip.addEventListener("pointerdown", function (e) { begin("resize", e); });
+
+    panel.addEventListener("pointermove", function (e) {
+      if (!mode) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (mode === "move") {
+        layout.left = start.left + dx;
+        layout.top = start.top + dy;
+      } else {
+        layout.w = start.w + dx;
+        layout.h = start.h + dy;
+      }
+      applyLayout();
+    });
+
+    function stop() {
+      if (!mode) return;
+      mode = null;
+      panel.classList.remove("is-moving");
+      saveLayout(layout);
+    }
+    panel.addEventListener("pointerup", stop);
+    panel.addEventListener("pointercancel", stop);
+
+    // 見出しを2回押すと、元の位置と大きさに戻す
+    head.addEventListener("dblclick", function () {
+      layout = null; applyLayout(); saveLayout(layout || {});
+    });
+
+    window.addEventListener("resize", function () { if (open) applyLayout(); });
+  }
+
   function init() {
+    initWindow();
     $("chat-fab").addEventListener("click", toggle);
     $("chat-close").addEventListener("click", close);
 

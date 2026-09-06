@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 13;
+
 /* =============================================================================
    人脈グラフ（Phase 4）
 
@@ -43,6 +46,8 @@ const Graph = (function () {
 
     // いま見えている範囲（拡大縮小と移動に使う）
     view: { x: 0, y: 0, w: VIEW_W, h: VIEW_H },
+    scope: "all",     // "all"=全員 / "mine"=選択中の利用者が交換した名刺だけ
+    markSole: true,   // 組織内で1人しか接点がない人を強調するか
     spacing: 1,       // ノードの間隔（0.7=せまい / 1=ふつう / 1.4=ひろい）
   };
 
@@ -66,7 +71,17 @@ const Graph = (function () {
 
   /** 保存されているデータから、図に描く材料を組み立てる */
   function build() {
-    const persons = Storage.searchPersons("", "", "name");
+    let persons = Storage.searchPersons("", "", "name");
+
+    /* 「自分の名刺だけ」を選んだときは、
+       いま選ばれている利用者が名刺交換した相手だけに絞ります。
+       誰と接点があるかを、自分を中心に見たいときに使います。 */
+    const me = Storage.getCurrentUserId();
+    if (state.scope === "mine" && me) {
+      const mine = {};
+      Storage.getContactsOfUser(me).forEach((p) => { mine[p.id] = true; });
+      persons = persons.filter((p) => mine[p.id]);
+    }
     const orgIds = [];
     persons.forEach(function (p) {
       if (p.organization_id && orgIds.indexOf(p.organization_id) < 0) {
@@ -87,6 +102,8 @@ const Graph = (function () {
       return {
         id: p.id,
         name: p.name,
+        // 組織内で、この人と名刺を交換しているのが1人だけかどうか
+        soleContact: Storage.getUsersWhoKnow(p.id).length === 1,
         orgId: p.organization_id,
         org: Storage.getOrganizationName(p.organization_id),
         colorIndex: p.organization_id ? orgIds.indexOf(p.organization_id) : -1,
@@ -96,7 +113,10 @@ const Graph = (function () {
 
     // 社内の利用者もノードにする（四角で表示する）
     if (state.showUsers) {
-      Storage.getUsers().forEach(function (u, i) {
+      const userList = (state.scope === "mine" && me)
+        ? Storage.getUsers().filter((u) => u.id === me)
+        : Storage.getUsers();
+      userList.forEach(function (u, i) {
         const prevPos = prev["U:" + u.id] || {
           x: areaW() / 2 + Math.cos(i * 1.7) * 90 * state.spacing,
           y: areaH() / 2 + Math.sin(i * 1.7) * 90 * state.spacing,
@@ -222,6 +242,75 @@ const Graph = (function () {
         nd.y = Math.max(m, Math.min(areaH() - m, nd.y));
       });
     }
+
+    // 最後に、名前が重ならないように整える
+    separateLabels(pinned ? 2 : 30);
+  }
+
+  /* -------------------------------------------------------------------------
+     名前の重なりをほどく
+
+     丸どうしが離れていても、名前は横に広がるため重なります。
+     そこで、名前を囲む四角どうしが重なっていたら、
+     重なりの小さい方向へ押し離します。
+     横に重なっているときは横へ、縦に重なっているときは縦へ動かすので、
+     配置が大きく崩れません。
+     ------------------------------------------------------------------------- */
+
+  const FONT_W = 12;     // 文字1つのおおよその幅（CSSの13pxに合わせる）
+  const LABEL_H = 17;    // 名前1行の高さ
+
+  function labelBox(n) {
+    const r = 13 + Math.min(9, n.degree * 1.6);
+    return {
+      w: Math.max(r * 2, String(n.name || "").length * FONT_W + 8),
+      // 丸と、その下に置く名前を合わせた高さ
+      h: r * 2 + LABEL_H + 6,
+      // 名前は丸の下に出るので、囲みの中心は少し下になる
+      cy: (LABEL_H + 6) / 2,
+    };
+  }
+
+  function separateLabels(passes) {
+    const nodes = state.nodes;
+    const gap = 6;
+
+    for (let k = 0; k < (passes || 30); k++) {
+      let moved = 0;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const ba = labelBox(a), bb = labelBox(b);
+
+          const dx = b.x - a.x;
+          const dy = (b.y + bb.cy) - (a.y + ba.cy);
+          const needX = (ba.w + bb.w) / 2 + gap;
+          const needY = (ba.h + bb.h) / 2 + gap;
+
+          const overX = needX - Math.abs(dx);
+          const overY = needY - Math.abs(dy);
+          if (overX <= 0 || overY <= 0) continue;   // 重なっていない
+
+          // 重なりが小さい方向へ、半分ずつ押し離す
+          if (overX < overY) {
+            const push = (dx >= 0 ? 1 : -1) * overX / 2;
+            a.x -= push; b.x += push;
+          } else {
+            const push = (dy >= 0 ? 1 : -1) * overY / 2;
+            a.y -= push; b.y += push;
+          }
+          moved++;
+        }
+      }
+      if (!moved) break;         // どこも重なっていなければ終わり
+    }
+
+    // 図の外へ出ないようにする
+    const m = 34;
+    nodes.forEach(function (nd) {
+      nd.x = Math.max(m, Math.min(areaW() - m, nd.x));
+      nd.y = Math.max(m, Math.min(areaH() - m, nd.y));
+    });
   }
 
   function visibleLinks() {
@@ -329,12 +418,26 @@ const Graph = (function () {
       +     (state.showIsolated ? " checked" : "") + "> 関係のない人物も表示</label>"
       + "</div>"
       + '<div class="gctl">'
-      +   '<label for="g-spacing">間隔</label>'
-      +   '<select id="g-spacing" class="select select-sm">'
-      +     [["0.7","せまい"],["1","ふつう"],["1.4","ひろい"],["1.9","とても広い"]]
-            .map((o) => '<option value="' + o[0] + '"'
-              + (String(state.spacing) === o[0] ? " selected" : "") + ">" + o[1] + "</option>").join("")
+      +   '<label for="g-scope">表示</label>'
+      +   '<select id="g-scope" class="select select-sm">'
+      +     '<option value="all"' + (state.scope === "all" ? " selected" : "") + ">組織全体</option>"
+      +     '<option value="mine"' + (state.scope === "mine" ? " selected" : "") + ">"
+      +       (Storage.getCurrentUser()
+              ? esc(Storage.getCurrentUser().name) + "さんの名刺だけ"
+              : "自分の名刺だけ（利用者未選択）") + "</option>"
       +   "</select>"
+      + "</div>"
+      + '<div class="gctl">'
+      +   '<label><input type="checkbox" id="g-sole"'
+      +     (state.markSole ? " checked" : "") + "> 接点が1人だけの人を強調</label>"
+      + "</div>"
+      + '<div class="gctl gctl-spacing">'
+      +   '<label for="g-spacing">間隔</label>'
+      +   '<input type="range" id="g-spacing" min="0.6" max="3" step="0.05"'
+      +     ' value="' + state.spacing + '">'
+      +   '<span class="zlevel" id="g-spacing-level">'
+            + Math.round(state.spacing * 100) + "%</span>"
+      +   '<button class="btn btn-sm" id="g-untangle">名前の重なりをほどく</button>'
       + "</div>"
       + '<div class="gctl gctl-zoom">'
       +   '<button class="zbtn" id="g-zoom-out" aria-label="縮小">−</button>'
@@ -370,15 +473,45 @@ const Graph = (function () {
       render();
     });
 
-    // 間隔を変える。いまの配置を伸び縮みさせてから、計算をやり直す。
-    $("g-spacing").addEventListener("change", function () {
-      const next = Number(this.value);
+    /* 間隔つまみ。
+       動かしている間は軽い計算だけを行い、手を離したときに整えます。
+       つまみを動かすたびに重い計算をすると、動きが引っかかるためです。 */
+    const spacingInput = $("g-spacing");
+
+    function applySpacing(next, light) {
       const ratio = next / state.spacing;
       state.nodes.forEach(function (n) { n.x *= ratio; n.y *= ratio; });
       state.spacing = next;
-      simulate(220);
+      simulate(light ? 12 : 200);
+      resetView();
+      renderCanvas();
+      $("g-spacing-level").textContent = Math.round(next * 100) + "%";
+    }
+
+    spacingInput.addEventListener("input", function () {
+      applySpacing(Number(this.value), true);
+    });
+    spacingInput.addEventListener("change", function () {
+      applySpacing(Number(this.value), false);
+    });
+
+    // 名前が重なったときに、そこだけ整え直す
+    $("g-untangle").addEventListener("click", function () {
+      separateLabels(60);
+      renderCanvas();
+    });
+
+    $("g-scope").addEventListener("change", function () {
+      state.scope = this.value;
+      state.selected = null;
+      build();
       resetView();
       render();
+    });
+    $("g-sole").addEventListener("change", function () {
+      state.markSole = this.checked;
+      renderCanvas();
+      renderPanel();
     });
 
     $("g-zoom-in").addEventListener("click", function () { zoomBy(1.25); });
@@ -446,7 +579,8 @@ const Graph = (function () {
       const color = n.isUser
         ? "#16202a"                                  // 社内の利用者は濃い色の四角
         : (n.colorIndex >= 0 ? ORG_COLORS[n.colorIndex % ORG_COLORS.length] : "#8a949c");
-      const cls = "node" + (n.isUser ? " is-user" : "")
+      const sole = state.markSole && n.soleContact && !n.isUser;
+      const cls = "node" + (n.isUser ? " is-user" : "") + (sole ? " is-sole" : "")
         + (state.selected === n.id ? " is-selected" : "")
         + (onPath[n.id] ? " is-path" : (dim ? " is-dim" : ""));
 
@@ -459,7 +593,10 @@ const Graph = (function () {
       return '<g class="' + cls + '" data-node="' + n.id + '"'
         + ' transform="translate(' + n.x.toFixed(1) + "," + n.y.toFixed(1) + ')">'
         + "<title>" + esc(n.name) + (n.isUser ? "（社内）" : (n.org ? "（" + esc(n.org) + "）" : ""))
-        + "　つながり " + n.degree + " 件</title>"
+        + "　つながり " + n.degree + " 件"
+        + (sole ? "　※社内でこの人と接点があるのは1人だけです" : "") + "</title>"
+        // 1人しか接点がない人には、外側に印の輪を描く
+        + (sole ? '<circle class="sole-ring" r="' + (r + 5) + '" fill="none"></circle>' : "")
         + shape
         + '<text y="' + (r + 15) + '" text-anchor="middle">' + esc(n.name) + "</text>"
         + "</g>";
@@ -670,6 +807,17 @@ const Graph = (function () {
     if (state.message) {
       head = '<div class="alert ' + (state.pathIds.length ? "alert-ok" : "alert-warn") + '">'
         + esc(state.message) + "</div>";
+    }
+
+    // 接点が1人だけの人が何名いるかを知らせる
+    if (state.markSole) {
+      const sole = visibleNodes().filter((n) => n.soleContact && !n.isUser);
+      if (sole.length) {
+        head += '<div class="sole-note">'
+          + "<b>社内で接点が1人だけの人：" + sole.length + " 名</b>"
+          + "<div>その人が抜けると、つながりが途切れます。</div>"
+          + "</div>";
+      }
     }
 
     if (!state.selected) {

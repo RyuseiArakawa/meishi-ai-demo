@@ -7,9 +7,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
+
+<!-- 起動時のエラーを画面に出す。
+     何も出ずに固まるのが一番困るため、必ず理由が見えるようにしています。 -->
+<script>
+(function () {
+  window.__showFatal = function (title, detail) {
+    var box = document.getElementById("fatal");
+    if (!box) return;
+    box.hidden = false;
+    box.innerHTML = '<b>' + title + '</b>'
+      + (detail ? '<div class="fatal-detail">' + String(detail).replace(/[<>&]/g, "") + '</div>' : '')
+      + '<div class="fatal-hint">ファイルを差し替えたあとは '
+      + '<b>Ctrl + Shift + R</b>（Macは Command + Shift + R）で読み直してください。</div>';
+  };
+  window.addEventListener("error", function (e) {
+    window.__showFatal("読み込みでエラーが起きました",
+      (e.filename || "").split("/").pop() + "：" + (e.message || ""));
+  });
+})();
+</script>
+
 
 <!-- ===== 左：ナビゲーション ===== -->
 <nav class="sidebar">
@@ -26,14 +47,9 @@
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
     <li><button class="nav-item" data-screen="people">人物</button></li>
     <li><button class="nav-item" data-screen="graph">人脈</button></li>
-    <li><button class="nav-item" id="nav-chat">AIチャット</button></li>
   </ul>
 
-  <div class="sidebar-user" id="userbar"></div>
-
   <div class="sidebar-foot">
-    <div id="conn" class="conn conn-unknown">接続を確認中…</div>
-    <div id="syncstate" class="conn conn-unknown">保存先を確認中…</div>
     <p>デモ版<br>架空の名刺で操作してください</p>
   </div>
 </nav>
@@ -41,8 +57,19 @@
 <!-- ===== 中央：メインコンテンツ ===== -->
 <main class="content">
 
+  <div class="fatal" id="fatal" hidden></div>
+
+
   <!-- ---------- ダッシュボード ---------- -->
   <section id="screen-dashboard" class="screen">
+
+    <div class="statusbar">
+      <div class="sb-user" id="userbar"></div>
+      <div class="sb-sep"></div>
+      <div id="conn" class="conn conn-unknown">接続を確認中…</div>
+      <div id="syncstate" class="conn conn-unknown">保存先を確認中…</div>
+    </div>
+
     <header class="page-head">
       <h1>ダッシュボード</h1>
       <p>名刺を起点に、人・組織・知識のつながりを蓄積します。</p>
@@ -266,7 +293,8 @@
 </button>
 
 <section class="chat-panel" id="chat-panel" hidden aria-label="AIチャット">
-  <header class="chat-head">
+  <span class="chat-resize" id="chat-resize" aria-hidden="true"></span>
+  <header class="chat-head" id="chat-head">
     <div>
       <div class="chat-title">AIチャット</div>
       <div class="chat-sub">登録されている情報だけを根拠に答えます</div>
@@ -277,6 +305,7 @@
     </div>
   </header>
   <div class="chat-log" id="chat-log"></div>
+  <div class="chat-suggest" id="chat-suggest"></div>
   <div class="chat-form">
     <input type="text" id="chat-input" placeholder="質問を入力してください" autocomplete="off">
     <button class="btn btn-primary btn-sm" id="chat-send">送信</button>
@@ -288,14 +317,36 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=11"></script>
-<script src="js/remote.js?v=11"></script>
-<script src="js/storage.js?v=11"></script>
-<script src="js/gemini.js?v=11"></script>
-<script src="js/pdf.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
-<script src="js/people.js?v=11"></script>
-<script src="js/graph.js?v=11"></script>
-<script src="js/ai-chat.js?v=11"></script>
+<script src="js/config.js?v=14"></script>
+<script src="js/remote.js?v=14"></script>
+<script src="js/storage.js?v=14"></script>
+<script src="js/gemini.js?v=14"></script>
+<script src="js/pdf.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
+<script src="js/people.js?v=14"></script>
+<script src="js/graph.js?v=14"></script>
+<script src="js/ai-chat.js?v=14"></script>
+
+<!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
+<script>
+(function () {
+  var NEED = 13;
+  var FILES = ["config","remote","storage","gemini","pdf","app","people","graph","ai-chat"];
+  var got = window.APP_BUILD || {};
+  var old = [], missing = [];
+
+  FILES.forEach(function (n) {
+    if (got[n] === undefined) missing.push(n + ".js");
+    else if (got[n] !== NEED) old.push(n + ".js（版 " + got[n] + "）");
+  });
+
+  if (missing.length || old.length) {
+    var msg = "";
+    if (old.length) msg += "古いファイルが残っています：" + old.join("、") + "。";
+    if (missing.length) msg += "読み込めていないファイルがあります：" + missing.join("、") + "。";
+    window.__showFatal("ファイルの版がそろっていません（必要な版：" + NEED + "）", msg);
+  }
+})();
+</script>
 </body>
 </html>

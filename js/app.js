@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 13;
+
 /* =============================================================================
    画面の動き（Phase 2）
 
@@ -703,7 +706,6 @@
     try {
       // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
       AIChat.init();
-      $("nav-chat").addEventListener("click", AIChat.toggle);
       $("card-chat").addEventListener("click", AIChat.show);
     } catch (err) {
       // ここで止まっても、名刺登録などは使えるようにしておく
