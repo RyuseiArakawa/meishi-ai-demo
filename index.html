@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
 
@@ -317,34 +317,42 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=14"></script>
-<script src="js/remote.js?v=14"></script>
-<script src="js/storage.js?v=14"></script>
-<script src="js/gemini.js?v=14"></script>
-<script src="js/pdf.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
-<script src="js/people.js?v=14"></script>
-<script src="js/graph.js?v=14"></script>
-<script src="js/ai-chat.js?v=14"></script>
+<script src="js/config.js?v=15"></script>
+<script src="js/remote.js?v=15"></script>
+<script src="js/storage.js?v=15"></script>
+<script src="js/gemini.js?v=15"></script>
+<script src="js/pdf.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
+<script src="js/people.js?v=15"></script>
+<script src="js/graph.js?v=15"></script>
+<script src="js/ai-chat.js?v=15"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
 (function () {
-  var NEED = 13;
-  var FILES = ["config","remote","storage","gemini","pdf","app","people","graph","ai-chat"];
+  /* ファイルごとに、必要な版を書いてあります。
+     中身を直したファイルだけ番号が上がるので、
+     変わっていないファイルを差し替える必要はありません。 */
+  var NEED = {
+    "app":     13,
+    "graph":   13,
+    "ai-chat": 13
+  };
+
   var got = window.APP_BUILD || {};
-  var old = [], missing = [];
+  var wrong = [];
 
-  FILES.forEach(function (n) {
-    if (got[n] === undefined) missing.push(n + ".js");
-    else if (got[n] !== NEED) old.push(n + ".js（版 " + got[n] + "）");
-  });
+  for (var n in NEED) {
+    if (got[n] !== NEED[n]) {
+      wrong.push(n + ".js（必要 " + NEED[n]
+        + (got[n] === undefined ? " / 読み込めていません" : " / いま " + got[n]) + "）");
+    }
+  }
 
-  if (missing.length || old.length) {
-    var msg = "";
-    if (old.length) msg += "古いファイルが残っています：" + old.join("、") + "。";
-    if (missing.length) msg += "読み込めていないファイルがあります：" + missing.join("、") + "。";
-    window.__showFatal("ファイルの版がそろっていません（必要な版：" + NEED + "）", msg);
+  if (wrong.length && window.__showFatal) {
+    window.__showFatal(
+      "差し替えが済んでいないファイルがあります",
+      wrong.join("　") + "。ZIP の js フォルダから、このファイルを上書きしてください。");
   }
 })();
 </script>

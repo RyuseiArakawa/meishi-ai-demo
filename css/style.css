@@ -773,6 +773,7 @@ input[type=text], input[type=date], input[type=search], select {
   display: flex; flex-direction: column; overflow: hidden;
 }
 .chat-head {
+  flex: none;
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 10px; padding: 13px 16px; background: var(--ink); color: #fff;
 }
@@ -787,7 +788,10 @@ input[type=text], input[type=date], input[type=search], select {
 }
 .chat-x:hover { color: #fff; }
 
-.chat-log { flex: 1; overflow-y: auto; padding: 16px; background: var(--bg); }
+/* 縦に並べたとき、この領域だけが縮んで残りが押し出されないようにする。
+   min-height を 0 にしないと、内容の高さのぶんだけ広がり続け、
+   下の入力欄と送信ボタンが窓の外へ出てしまう。 */
+.chat-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; background: var(--bg); }
 
 .chat-intro { text-align: center; padding: 12px 4px; }
 .chat-intro-title { font-family: var(--mincho); font-size: 15px; font-weight: 600; margin-bottom: 6px; }
@@ -853,7 +857,11 @@ input[type=text], input[type=date], input[type=search], select {
 .ct-step ul { list-style: none; margin: 3px 0 0; padding: 0; }
 .ct-step code { font-size: 11px; background: var(--field); padding: 0 4px; border-radius: 2px; }
 
-.chat-form { display: flex; gap: 8px; padding: 11px 13px; border-top: 1px solid var(--rule); }
+/* 右下の取っ手と送信ボタンが重ならないよう、右側を少し空ける */
+.chat-form {
+  flex: none; display: flex; gap: 8px;
+  padding: 11px 22px 11px 13px; border-top: 1px solid var(--rule);
+}
 .chat-form input {
   flex: 1; padding: 9px 11px; border: 1px solid var(--rule2);
   border-radius: 3px; font-family: inherit; font-size: 14px;
@@ -934,7 +942,9 @@ input[type=text], input[type=date], input[type=search], select {
 
 /* ===== チャット：移動・大きさ変更・質問候補 ============================== */
 
-.chat-panel.is-placed { right: auto; bottom: auto; }
+/* 位置と大きさを自分で決めたときは、既定の上限を外す
+   （そうしないと、広げたのに縦が伸びないことがある） */
+.chat-panel.is-placed { right: auto; bottom: auto; max-height: none; }
 .chat-panel.is-moving { user-select: none; }
 .chat-head { cursor: move; user-select: none; }
 .chat-resize {
@@ -944,9 +954,14 @@ input[type=text], input[type=date], input[type=search], select {
     linear-gradient(135deg, transparent 0 50%, var(--rule2) 50% 60%,
                     transparent 60% 70%, var(--rule2) 70% 80%, transparent 80%);
 }
-@media (max-width: 700px) { .chat-resize { display: none; } .chat-head { cursor: default; } }
+@media (max-width: 700px) {
+  .chat-resize { display: none; }
+  .chat-head { cursor: default; }
+  .chat-form { padding-right: 13px; }   /* 取っ手が無いので右の余白は不要 */
+}
 
 .chat-suggest {
+  flex: none;
   display: flex; gap: 6px; overflow-x: auto; padding: 9px 13px 0;
   scrollbar-width: none;
 }
