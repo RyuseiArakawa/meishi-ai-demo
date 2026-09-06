@@ -482,8 +482,15 @@
     const reader = new FileReader();
     reader.onload = function () {
       const r = Storage.importJSON(reader.result);
-      alert(r.ok ? "読み込みました。" : (r.error || "読み込めませんでした。"));
+      if (!r.ok) { alert(r.error || "読み込めませんでした。"); }
+      else if (r.shared) {
+        alert("読み込みました。スプレッドシートへ順に送っています。"
+            + "左下の表示が「同期済み」になるまでお待ちください。");
+      } else {
+        alert("読み込みました。");
+      }
       renderDashboard();
+      renderUserBar();
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -618,6 +625,21 @@
 
   const reloadBtn = $("btn-reload");
   if (reloadBtn) reloadBtn.addEventListener("click", reload);
+
+  // 手元のデータを、まとめてスプレッドシートへ送る
+  const pushBtn = $("btn-pushall");
+  if (pushBtn) pushBtn.addEventListener("click", function () {
+    const s = Storage.getStats();
+    if (!confirm(
+        "手元にあるデータをすべてスプレッドシートへ送ります。\n\n"
+      + "人物 " + s.persons + " 名／名刺 " + s.cards + " 枚\n\n"
+      + "同じIDの行はスプレッドシート側が書き換わります。\n"
+      + "名刺画像はドライブへ送るため、数分かかることがあります。")) return;
+
+    const r = Storage.pushAll();
+    if (!r.ok) { alert(r.error); return; }
+    alert(r.count + " 行を送信箱に入れました。左下に進み具合が出ます。");
+  });
 
 
   /* =========================================================================

@@ -785,6 +785,22 @@ const Storage = (function () {
     return getStats();
   }
 
+  /**
+   * 手元にあるデータを、まとめてスプレッドシートへ送る。
+   * JSONを読み込んだあとに使います（読み込みだけでは手元にしか入らないため）。
+   */
+  function pushAll() {
+    if (!sharedMode) {
+      return { ok: false, error: "スプレッドシートとつながっていません。" };
+    }
+    let count = 0;
+    Object.keys(SHEET_OF).forEach(function (local) {
+      const rows = db[local];
+      if (rows && rows.length) { push(local, rows); count += rows.length; }
+    });
+    return { ok: true, count: count };
+  }
+
   /** 画像をドライブへ送ったあと、その置き場所を控える */
   function noteCardImageId(cardId, fileId) {
     const c = db.business_cards.find((x) => x.id === cardId);
@@ -817,7 +833,15 @@ const Storage = (function () {
         return { ok: false, error: "このファイルはこのシステムのデータではありません。" };
       }
       db = Object.assign(emptyDB(), incoming);
-      return { ok: persist(), error: lastError };
+      const ok = persist();
+
+      // 共有データベースを使っているときは、読み込んだ内容をすべて送る
+      if (sharedMode) {
+        Object.keys(SHEET_OF).forEach(function (local) {
+          if (db[local] && db[local].length) push(local, db[local]);
+        });
+      }
+      return { ok: ok, error: lastError, shared: sharedMode };
     } catch {
       return { ok: false, error: "ファイルを読み取れませんでした。" };
     }
@@ -859,7 +883,7 @@ const Storage = (function () {
     getUsers, getUser, addUser,
     getCurrentUserId, getCurrentUser, setCurrentUser,
     getCardOwner, getContactsOfUser, getUsersWhoKnow,
-    enableShared, isShared, applyRemote, noteCardImageId,
+    enableShared, isShared, applyRemote, noteCardImageId, pushAll,
 
     // AI検索のための検索関数（Phase 5）
     searchPeopleByTopic, searchPeopleByAttribute, searchPeopleByInteraction,
