@@ -645,14 +645,9 @@
      起動時
      ========================================================================= */
 
-  // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
-  AIChat.init();
-  $("nav-chat").addEventListener("click", AIChat.toggle);
-  $("card-chat").addEventListener("click", AIChat.show);
-
   Remote.onChange(renderSyncState);
 
-  (async function start() {
+  async function start() {
     show("dashboard");
     renderUserBar();
     renderSyncState(Remote.status());
@@ -692,5 +687,43 @@
 
     // 4. まだ誰として使うかが決まっていなければ、選んでもらう
     if (!Storage.getCurrentUser()) openUserPicker();
-  })();
+  }
+
+
+  /* =========================================================================
+     起動のきっかけ
+
+     このファイルは、people.js・graph.js・ai-chat.js より先に読み込まれます
+     （それらが使う共通の道具を、ここで用意しているためです）。
+     そのため、ここですぐ AIChat.init() を呼ぶと「まだ無い」ことになります。
+     すべての読み込みが終わってから始めます。
+     ========================================================================= */
+
+  function boot() {
+    try {
+      // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
+      AIChat.init();
+      $("nav-chat").addEventListener("click", AIChat.toggle);
+      $("card-chat").addEventListener("click", AIChat.show);
+    } catch (err) {
+      // ここで止まっても、名刺登録などは使えるようにしておく
+      console.error("AIチャットを準備できませんでした", err);
+    }
+
+    start().catch(function (err) {
+      console.error("起動に失敗しました", err);
+      const el = $("conn");
+      el.className = "conn conn-ng";
+      el.textContent = "▲ 起動に失敗しました：" + err.message;
+      const sy = $("syncstate");
+      sy.className = "conn conn-ng";
+      sy.textContent = "保存先を確認できませんでした";
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
