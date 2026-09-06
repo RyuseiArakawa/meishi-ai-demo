@@ -47,7 +47,7 @@
      画面の切り替え
      ========================================================================= */
 
-  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person", "graph", "ai"];
+  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person", "graph"];
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -66,7 +66,6 @@
     if (name === "people") People.enter();
     if (name === "person") People.renderDetail(id);
     if (name === "graph") Graph.enter();
-    if (name === "ai") AISearch.enter();
 
     window.scrollTo(0, 0);
   }
@@ -645,6 +644,11 @@
   /* =========================================================================
      起動時
      ========================================================================= */
+
+  // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
+  AIChat.init();
+  $("nav-chat").addEventListener("click", AIChat.toggle);
+  $("card-chat").addEventListener("click", AIChat.show);
 
   Remote.onChange(renderSyncState);
 

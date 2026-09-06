@@ -156,14 +156,16 @@ const Graph = (function () {
      ・全体が中央に集まるよう、弱く引き寄せる
      この3つを何度も繰り返すと、自然に見える配置に落ち着きます。
      ------------------------------------------------------------------------- */
-  function simulate(steps) {
+  function simulate(steps, pinned) {
     const nodes = state.nodes;
     const links = visibleLinks();
     const n = nodes.length;
     if (!n) return;
 
-    for (let step = 0; step < (steps || 320); step++) {
-      const cooling = 1 - step / (steps || 320);      // だんだん動きを小さくする
+    const total = steps || 320;
+    for (let step = 0; step < total; step++) {
+      // 指で動かしている間は、勢いを一定にして自然に追従させる
+      const cooling = pinned ? 0.6 : (1 - step / total);
 
       // 反発
       for (let i = 0; i < n; i++) {
@@ -199,8 +201,9 @@ const Graph = (function () {
         nd.vy += (VIEW_H / 2 - nd.y) * 0.012;
       });
 
-      // 動かす
+      // 動かす（つかんでいる丸は指の位置のまま）
       nodes.forEach(function (nd) {
+        if (nd === pinned) { nd.vx = 0; nd.vy = 0; return; }
         nd.x += nd.vx * 0.4 * cooling;
         nd.y += nd.vy * 0.4 * cooling;
         nd.vx *= 0.82; nd.vy *= 0.82;
@@ -389,7 +392,7 @@ const Graph = (function () {
       const title = esc(a.name) + " ― " + esc(b.name) + "　"
         + esc(l.label) + "　強さ" + l.strength
         + (l.source ? "　根拠：" + esc(l.source) : "");
-      return '<g class="' + cls + '">'
+      return '<g class="' + cls + '" data-a="' + l.a + '" data-b="' + l.b + '">'
         + "<title>" + title + "</title>"
         + '<line x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1) + '"'
         + ' x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1) + '"'
@@ -433,47 +436,108 @@ const Graph = (function () {
     wireCanvas();
   }
 
-  /** 丸を押して選ぶ、引きずって動かす */
-  function wireCanvas() {
-    const svg = $("graph-canvas").querySelector("svg");
-    if (!svg) return;
+  /* -------------------------------------------------------------------------
+     丸を押して選ぶ、引きずって動かす
 
-    let dragging = null;
-    let moved = false;
+     指を動かすたびに図全体を作り直すと、動きがぎこちなくなります。
+     ここでは、位置が変わった丸と線の座標だけを書き換えます。
+     あわせて、画面の更新に合わせて計算を少しずつ回すことで、
+     つかんだ丸のまわりがばねのように追従します。
+     ------------------------------------------------------------------------- */
+
+  let svgEl = null;
+  let nodeEls = {};     // 人物ID → 丸のまとまり
+  let edgeEls = [];     // { a, b, line }
+  let dragging = null;
+  let moved = false;
+  let raf = 0;
+
+  function collectElements() {
+    svgEl = $("graph-canvas").querySelector("svg");
+    nodeEls = {};
+    edgeEls = [];
+    if (!svgEl) return;
+
+    svgEl.querySelectorAll("[data-node]").forEach(function (g) {
+      nodeEls[g.dataset.node] = g;
+    });
+    svgEl.querySelectorAll("[data-a]").forEach(function (g) {
+      const line = g.querySelector("line");
+      if (line) edgeEls.push({ a: g.dataset.a, b: g.dataset.b, line: line });
+    });
+  }
+
+  /** 座標だけを書き換える（作り直さない） */
+  function updatePositions() {
+    Object.keys(nodeEls).forEach(function (id) {
+      const n = nodeById(id);
+      if (n) nodeEls[id].setAttribute("transform",
+        "translate(" + n.x.toFixed(1) + "," + n.y.toFixed(1) + ")");
+    });
+    edgeEls.forEach(function (e) {
+      const a = nodeById(e.a), b = nodeById(e.b);
+      if (!a || !b) return;
+      e.line.setAttribute("x1", a.x.toFixed(1));
+      e.line.setAttribute("y1", a.y.toFixed(1));
+      e.line.setAttribute("x2", b.x.toFixed(1));
+      e.line.setAttribute("y2", b.y.toFixed(1));
+    });
+  }
+
+  /** 画面の更新に合わせて、少しずつ計算して動かす */
+  function tick() {
+    if (!dragging) { raf = 0; return; }
+    simulate(2, dragging);
+    updatePositions();
+    raf = requestAnimationFrame(tick);
+  }
+
+  function wireCanvas() {
+    collectElements();
+    if (!svgEl) return;
 
     function toSvgPoint(evt) {
-      const rect = svg.getBoundingClientRect();
+      const rect = svgEl.getBoundingClientRect();
       return {
         x: ((evt.clientX - rect.left) / rect.width) * VIEW_W,
         y: ((evt.clientY - rect.top) / rect.height) * VIEW_H,
       };
     }
 
-    svg.querySelectorAll("[data-node]").forEach(function (g) {
-      g.addEventListener("pointerdown", function (e) {
-        dragging = nodeById(g.dataset.node);
-        moved = false;
-        g.setPointerCapture(e.pointerId);
-        e.preventDefault();
-      });
-
-      g.addEventListener("pointermove", function (e) {
-        if (!dragging) return;
-        const p = toSvgPoint(e);
-        dragging.x = p.x; dragging.y = p.y;
-        moved = true;
-        renderCanvas();          // 位置が変わったので描き直す
-      });
-
-      g.addEventListener("pointerup", function (e) {
-        if (dragging && !moved) {
-          state.selected = dragging.id;
-          renderCanvas();
-          renderPanel();
-        }
-        dragging = null;
-      });
+    svgEl.addEventListener("pointerdown", function (e) {
+      const g = e.target.closest("[data-node]");
+      if (!g) return;
+      dragging = nodeById(g.dataset.node);
+      moved = false;
+      if (svgEl.setPointerCapture) svgEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      if (!raf) raf = requestAnimationFrame(tick);
     });
+
+    svgEl.addEventListener("pointermove", function (e) {
+      if (!dragging) return;
+      const p = toSvgPoint(e);
+      dragging.x = p.x;
+      dragging.y = p.y;
+      moved = true;
+      e.preventDefault();
+    });
+
+    function end() {
+      if (!dragging) return;
+      const wasClick = !moved;
+      const id = dragging.id;
+      dragging = null;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (wasClick) {
+        state.selected = id;
+        renderCanvas();       // 選ばれた印を付けるので、ここは作り直す
+        renderPanel();
+      }
+    }
+    svgEl.addEventListener("pointerup", end);
+    svgEl.addEventListener("pointercancel", end);
+    svgEl.addEventListener("pointerleave", end);
   }
 
   /* --- 右側の詳細パネル ---------------------------------------------------- */
@@ -611,5 +675,27 @@ const Graph = (function () {
   }
 
 
-  return { enter: enter };
+  /**
+   * 外から呼ぶ入口。
+   * AIチャットが「このつながりを図で見せたい」ときに使います。
+   * 指定された人だけを強調し、それ以外を薄くします。
+   */
+  function focusOn(ids) {
+    build();
+    const valid = (ids || []).filter((id) => nodeById(id));
+    state.pathIds = valid;
+    state.pathLinks = [];
+    for (let i = 0; i < valid.length - 1; i++) {
+      state.pathLinks.push(linkKey(valid[i], valid[i + 1]));
+    }
+    state.selected = valid.length ? valid[0] : null;
+    state.message = valid.length > 1
+      ? valid.map((id) => (nodeById(id) || {}).name).join(" → ")
+      : "";
+    state.pathFrom = valid[0] || "";
+    state.pathTo = valid.length > 1 ? valid[valid.length - 1] : "";
+    render();
+  }
+
+  return { enter: enter, focusOn: focusOn };
 })();

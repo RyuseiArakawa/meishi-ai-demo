@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
     <li><button class="nav-item" data-screen="people">人物</button></li>
     <li><button class="nav-item" data-screen="graph">人脈</button></li>
-    <li><button class="nav-item" data-screen="ai">AI検索</button></li>
+    <li><button class="nav-item" id="nav-chat">AIチャット</button></li>
   </ul>
 
   <div class="sidebar-user" id="userbar"></div>
@@ -75,8 +75,8 @@
         <p>人物をノード、関係をエッジとして図に表示します。2人の間の経路も探せます。</p>
         <span class="menu-go">ひらく</span>
       </button>
-      <button class="menu-card" data-screen="ai">
-        <h2>AI検索</h2>
+      <button class="menu-card" id="card-chat">
+        <h2>AIチャット</h2>
         <p>「旋盤加工について相談できる人は」といった質問に、登録情報だけを根拠に答えます。</p>
         <span class="menu-go">ひらく</span>
       </button>
@@ -245,20 +245,6 @@
     </div>
   </section>
 
-  <!-- ---------- AI検索（Phase 5） ---------- -->
-  <section id="screen-ai" class="screen" hidden>
-    <header class="page-head">
-      <h1>AI検索</h1>
-      <p>登録されている情報だけを根拠に答えます。AIがデータベースを直接検索することはありません。</p>
-    </header>
-
-    <div id="ai-form" class="ai-form"></div>
-    <div class="ai-layout">
-      <div id="ai-result" class="ai-result" hidden></div>
-      <aside id="ai-steps" class="ai-steps" hidden></aside>
-    </div>
-  </section>
-
   <!-- ---------- 人物詳細（Phase 2） ---------- -->
   <section id="screen-person" class="screen" hidden>
     <p class="backline"><button class="linkbtn" data-screen="people">← 人物一覧へもどる</button></p>
@@ -267,19 +253,49 @@
 
 </main>
 
+<!-- AIチャット -->
+<button class="chat-fab" id="chat-fab" aria-label="AIチャットを開く" title="AIチャット">
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+    <path d="M12 3C7 3 3 6.4 3 10.6c0 2.4 1.3 4.5 3.4 5.9L6 20.4l3.6-1.9c.8.2 1.6.3 2.4.3
+             5 0 9-3.4 9-7.6S17 3 12 3z" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linejoin="round"/>
+    <circle cx="8.6" cy="10.6" r="1.15" fill="currentColor"/>
+    <circle cx="12" cy="10.6" r="1.15" fill="currentColor"/>
+    <circle cx="15.4" cy="10.6" r="1.15" fill="currentColor"/>
+  </svg>
+</button>
+
+<section class="chat-panel" id="chat-panel" hidden aria-label="AIチャット">
+  <header class="chat-head">
+    <div>
+      <div class="chat-title">AIチャット</div>
+      <div class="chat-sub">登録されている情報だけを根拠に答えます</div>
+    </div>
+    <div class="chat-head-btns">
+      <button class="linkbtn" id="chat-clear">履歴を消す</button>
+      <button class="chat-x" id="chat-close" aria-label="閉じる">×</button>
+    </div>
+  </header>
+  <div class="chat-log" id="chat-log"></div>
+  <div class="chat-form">
+    <input type="text" id="chat-input" placeholder="質問を入力してください" autocomplete="off">
+    <button class="btn btn-primary btn-sm" id="chat-send">送信</button>
+  </div>
+</section>
+
 <!-- 利用者を選ぶ小窓 -->
 <div class="dialog" id="user-dialog" hidden>
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=9"></script>
-<script src="js/remote.js?v=9"></script>
-<script src="js/storage.js?v=9"></script>
-<script src="js/gemini.js?v=9"></script>
-<script src="js/pdf.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
-<script src="js/people.js?v=9"></script>
-<script src="js/graph.js?v=9"></script>
-<script src="js/ai-search.js?v=9"></script>
+<script src="js/config.js?v=10"></script>
+<script src="js/remote.js?v=10"></script>
+<script src="js/storage.js?v=10"></script>
+<script src="js/gemini.js?v=10"></script>
+<script src="js/pdf.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
+<script src="js/people.js?v=10"></script>
+<script src="js/graph.js?v=10"></script>
+<script src="js/ai-chat.js?v=10"></script>
 </body>
 </html>

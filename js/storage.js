@@ -807,6 +807,88 @@ const Storage = (function () {
     if (c && !c.image_file_id) { c.image_file_id = fileId; persist(); }
   }
 
+  /* --- つながりの経路をさがす（AIチャットとグラフで共用）--------------------
+
+     人物どうしの関係に加えて、「社内の誰がその名刺を持っているか」も
+     つながりとして扱います。社内の人のIDは "U:" で始めます。
+     -------------------------------------------------------------------------- */
+
+  function buildAdjacency(includeUsers) {
+    const adj = {};
+    const add = (a, b) => { (adj[a] = adj[a] || []).push(b); };
+
+    db.relationships.forEach(function (r) {
+      add(r.from_person_id, r.to_person_id);
+      add(r.to_person_id, r.from_person_id);
+    });
+
+    if (includeUsers !== false) {
+      db.business_cards.forEach(function (c) {
+        if (!c.owner_user_id || !c.person_id) return;
+        add("U:" + c.owner_user_id, c.person_id);
+        add(c.person_id, "U:" + c.owner_user_id);
+      });
+    }
+    return adj;
+  }
+
+  /**
+   * 2者の間の、いちばん短い道筋を返す。
+   * 見つからなければ null。
+   */
+  function findConnectionPath(fromId, toId, includeUsers) {
+    if (!fromId || !toId || fromId === toId) return null;
+
+    const adj = buildAdjacency(includeUsers);
+    const prev = {}, seen = {}, queue = [fromId];
+    seen[fromId] = true;
+
+    while (queue.length) {
+      const cur = queue.shift();
+      if (cur === toId) {
+        const path = [cur];
+        while (prev[path[0]]) path.unshift(prev[path[0]]);
+        return path;
+      }
+      (adj[cur] || []).forEach(function (next) {
+        if (seen[next]) return;
+        seen[next] = true;
+        prev[next] = cur;
+        queue.push(next);
+      });
+    }
+    return null;
+  }
+
+  /** ID（"U:..." を含む）から表示名を引く */
+  function displayName(id) {
+    if (String(id).indexOf("U:") === 0) {
+      const u = getUser(String(id).slice(2));
+      return u ? u.name : "?";
+    }
+    const p = getPerson(id);
+    return p ? p.name : "?";
+  }
+
+  /** 2者の間に直接登録されている関係（種類と強さ） */
+  function relationBetween(a, b) {
+    const r = findRelationshipBetween(a, b);
+    if (r) {
+      return { label: relationshipLabel(r.relationship_type), strength: r.strength,
+               source: r.source };
+    }
+    // 名刺の登録記録によるつながりか
+    const ua = String(a).indexOf("U:") === 0 ? String(a).slice(2) : null;
+    const ub = String(b).indexOf("U:") === 0 ? String(b).slice(2) : null;
+    const owner = ua || ub;
+    const person = ua ? b : a;
+    if (owner && db.business_cards.some(
+        (c) => c.owner_user_id === owner && c.person_id === person)) {
+      return { label: "名刺交換", strength: null, source: "名刺の登録記録" };
+    }
+    return null;
+  }
+
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
@@ -884,6 +966,7 @@ const Storage = (function () {
     getCurrentUserId, getCurrentUser, setCurrentUser,
     getCardOwner, getContactsOfUser, getUsersWhoKnow,
     enableShared, isShared, applyRemote, noteCardImageId, pushAll,
+    findConnectionPath, displayName, relationBetween,
 
     // AI検索のための検索関数（Phase 5）
     searchPeopleByTopic, searchPeopleByAttribute, searchPeopleByInteraction,
