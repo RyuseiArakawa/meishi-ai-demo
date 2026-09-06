@@ -18,6 +18,7 @@ const Storage = (function () {
   function emptyDB() {
     return {
       version: 1,
+      users:          [],   // このシステムの利用者（社内の人）
       organizations:  [],   // 組織
       persons:        [],   // 人物
       business_cards: [],   // 名刺
@@ -63,6 +64,32 @@ const Storage = (function () {
     }
   }
 
+  /* --- 共有データベース（スプレッドシート）との対応 -------------------------
+
+     シートの名前と、このファイルの中での呼び方の対応表です。
+     Remote に渡すときはシートの名前に、受け取るときは元に戻します。
+     -------------------------------------------------------------------------- */
+
+  const SHEET_OF = {
+    users: "Users", organizations: "Organizations", persons: "Persons",
+    business_cards: "BusinessCards", relationships: "Relationships",
+    interactions: "Interactions", topics: "Topics", person_topics: "PersonTopics",
+  };
+  const LOCAL_OF = {};
+  Object.keys(SHEET_OF).forEach((k) => { LOCAL_OF[SHEET_OF[k]] = k; });
+
+  let sharedMode = false;      // スプレッドシートを使っているか
+
+  /** 変更した行を、共有データベースへ送る */
+  function push(table, rows) {
+    if (!sharedMode || !rows || !rows.length) return;
+    try { Remote.upsert(SHEET_OF[table], rows); } catch (e) {}
+  }
+  function drop(table, keys) {
+    if (!sharedMode || !keys || !keys.length) return;
+    try { Remote.remove(SHEET_OF[table], keys); } catch (e) {}
+  }
+
   /* --- 部品 --------------------------------------------------------------- */
 
   function uuid() {
@@ -74,6 +101,9 @@ const Storage = (function () {
   }
 
   const nowISO = () => new Date().toISOString();
+
+  /* 日本語の並び替え。ひらがなとカタカナの違いは無視して同じものとして扱う。 */
+  const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
 
   // 空文字やスペースだけの文字列は null にする
   function clean(v) {
@@ -114,6 +144,7 @@ const Storage = (function () {
       created_at: nowISO(), updated_at: nowISO(),
     };
     db.organizations.push(org);
+    push("organizations", [org]);
     return org.id;
   }
 
@@ -163,16 +194,21 @@ const Storage = (function () {
     person.name = name;
     db.persons.push(person);
 
-    db.business_cards.push({
+    const card = {
       id: uuid(),
       person_id: person.id,
-      image_path: imageDataUrl || null,   // 本番ではファイルの置き場所を入れる
+      owner_user_id: currentUserId,       // ★誰が交換した名刺か
+      image_path: imageDataUrl || null,   // 画面表示用（共有時はドライブへ送る）
+      image_file_id: null,                // ドライブでの置き場所
       ocr_text: JSON.stringify(fields),   // AIが読み取った元の内容を残しておく
       ocr_status: "confirmed",            // 人が確認済み
       created_at: nowISO(),
-    });
+    };
+    db.business_cards.push(card);
 
     const ok = persist();
+    push("persons", [person]);
+    push("business_cards", [card]);
     return { ok: ok, personId: person.id, error: lastError };
   }
 
@@ -195,11 +231,20 @@ const Storage = (function () {
     }
     p.updated_at = nowISO();
 
-    return { ok: persist(), error: lastError };
+    const ok = persist();
+    push("persons", [p]);
+    return { ok: ok, error: lastError };
   }
 
   /** 人物と、その人に紐づく名刺・専門・交流・関係をまとめて消す */
   function deletePerson(id) {
+    // 共有データベースからも消すため、消す前に対象を控えておく
+    const cards = db.business_cards.filter((x) => x.person_id === id);
+    const topics = db.person_topics.filter((x) => x.person_id === id);
+    const logs = db.interactions.filter((x) => x.person_id === id);
+    const rels = db.relationships.filter(
+      (x) => x.from_person_id === id || x.to_person_id === id);
+
     db.persons = db.persons.filter((x) => x.id !== id);
     db.business_cards = db.business_cards.filter((x) => x.person_id !== id);
     db.person_topics = db.person_topics.filter((x) => x.person_id !== id);
@@ -209,7 +254,14 @@ const Storage = (function () {
     );
     pruneOrganizations();
     pruneTopics();
-    return persist();
+
+    const ok = persist();
+    drop("persons", [{ id: id }]);
+    drop("business_cards", cards.map((x) => ({ id: x.id })));
+    drop("person_topics", topics.map((x) => ({ person_id: x.person_id, topic_id: x.topic_id })));
+    drop("interactions", logs.map((x) => ({ id: x.id })));
+    drop("relationships", rels.map((x) => ({ id: x.id })));
+    return ok;
   }
 
   /* --- 人物の取り出しと検索 ----------------------------------------------- */
@@ -271,10 +323,6 @@ const Storage = (function () {
     return list;
   }
 
-  /* 日本語の並び替え。
-     ひらがなとカタカナの違いは無視して同じものとして扱う。 */
-  const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
-
   /* 並び替えに使う読み。
      ふりがなが登録されていればそれを、無ければ漢字をそのまま使う。
      漢字には読み方の情報がないため、この場合は文字コードの順になる。 */
@@ -307,22 +355,30 @@ const Storage = (function () {
     if (!n) return { ok: false, error: "専門分野が空です。" };
 
     let t = db.topics.find((x) => fold(x.name) === fold(n));
+    let isNew = false;
     if (!t) {
       t = { id: uuid(), name: n, description: null };
       db.topics.push(t);
+      isNew = true;
     }
     const exists = db.person_topics.some(
       (pt) => pt.person_id === personId && pt.topic_id === t.id
     );
     if (exists) return { ok: true, error: "" };
 
-    db.person_topics.push({
+    const link = {
       person_id: personId,
       topic_id: t.id,
       confidence: 1,                       // 人が入力した情報なので 1
       source: clean(source) || "手入力",
-    });
-    return { ok: persist(), error: lastError };
+      created_by_user_id: currentUserId,   // 誰が登録した情報か
+    };
+    db.person_topics.push(link);
+
+    const ok = persist();
+    if (isNew) push("topics", [t]);
+    push("person_topics", [link]);
+    return { ok: ok, error: lastError };
   }
 
   function removeTopicFrom(personId, topicId) {
@@ -330,7 +386,9 @@ const Storage = (function () {
       (pt) => !(pt.person_id === personId && pt.topic_id === topicId)
     );
     pruneTopics();
-    return persist();
+    const ok = persist();
+    drop("person_topics", [{ person_id: personId, topic_id: topicId }]);
+    return ok;
   }
 
   // どの人物にも結びついていない専門分野を片づける
@@ -357,21 +415,28 @@ const Storage = (function () {
                          clean(data.location) || clean(data.occurred_at);
     if (!hasSomething) return { ok: false, error: "記録する内容がありません。" };
 
-    db.interactions.push({
+    const log = {
       id: uuid(),
       person_id: personId,
+      owner_user_id: currentUserId,        // 誰が記録したか
       occurred_at: clean(data.occurred_at) ? data.occurred_at + "T00:00:00Z" : null,
       location: clean(data.location),
       event_name: clean(data.event_name),
       summary: clean(data.summary),
       created_at: nowISO(),
-    });
-    return { ok: persist(), error: lastError };
+    };
+    db.interactions.push(log);
+
+    const ok = persist();
+    push("interactions", [log]);
+    return { ok: ok, error: lastError };
   }
 
   function removeInteraction(id) {
     db.interactions = db.interactions.filter((i) => i.id !== id);
-    return persist();
+    const ok = persist();
+    drop("interactions", [{ id: id }]);
+    return ok;
   }
 
   /* --- 人物同士の関係（relationships）― Phase 3 ------------------------------
@@ -447,7 +512,7 @@ const Storage = (function () {
       return { ok: false, error: "この2人には、同じ種類の関係がすでに登録されています。" };
     }
 
-    db.relationships.push({
+    const rel = {
       id: uuid(),
       from_person_id: fromId,
       to_person_id: toId,
@@ -455,14 +520,21 @@ const Storage = (function () {
       strength: s,
       source: clean(source),
       notes: clean(notes),
+      created_by_user_id: currentUserId,   // 誰が登録したか
       created_at: nowISO(),
-    });
-    return { ok: persist(), error: lastError };
+    };
+    db.relationships.push(rel);
+
+    const ok = persist();
+    push("relationships", [rel]);
+    return { ok: ok, error: lastError };
   }
 
   function removeRelationship(id) {
     db.relationships = db.relationships.filter((r) => r.id !== id);
-    return persist();
+    const ok = persist();
+    drop("relationships", [{ id: id }]);
+    return ok;
   }
 
   /** 向きを入れ替える（「指導した／指導を受けた」を直すときに使う） */
@@ -472,7 +544,9 @@ const Storage = (function () {
     const tmp = r.from_person_id;
     r.from_person_id = r.to_person_id;
     r.to_person_id = tmp;
-    return persist();
+    const ok = persist();
+    push("relationships", [r]);
+    return ok;
   }
 
   /* --- AI検索のための検索関数（Phase 5）― 設計書 §14 -------------------------
@@ -604,6 +678,119 @@ const Storage = (function () {
     }).filter(Boolean);
   }
 
+  /* --- 利用者（社内でこのシステムを使う人）--------------------------------
+
+     設計書の relationships が「外部の人どうし」を記録するのに対し、
+     こちらは「社内の誰が、その名刺を交換したか」を記録するためのものです。
+     人脈グラフで「この人と接点があるのは社内の誰か」を出すのに使います。
+
+     これは本格的な認証ではありません。誰として使うかを自分で選ぶ仕組みです。
+     実運用では、設計書 §21 のとおり認証が必要です。
+     -------------------------------------------------------------------------- */
+
+  const USER_KEY = "meishi_current_user_v1";
+  let currentUserId = null;
+
+  function loadCurrentUser() {
+    try { currentUserId = localStorage.getItem(USER_KEY) || null; } catch { currentUserId = null; }
+  }
+
+  const getUsers = () =>
+    db.users.slice().sort((a, b) => collator.compare(a.name || "", b.name || ""));
+
+  const getUser = (id) => db.users.find((u) => u.id === id) || null;
+  const getCurrentUserId = () => currentUserId;
+  const getCurrentUser = () => getUser(currentUserId);
+
+  function setCurrentUser(id) {
+    currentUserId = id || null;
+    try {
+      if (currentUserId) localStorage.setItem(USER_KEY, currentUserId);
+      else localStorage.removeItem(USER_KEY);
+    } catch (e) {}
+    return currentUserId;
+  }
+
+  function addUser(name, email, note) {
+    const n = clean(name);
+    if (!n) return { ok: false, error: "名前を入力してください。" };
+
+    const already = db.users.find((u) => fold(u.name) === fold(n));
+    if (already) return { ok: true, id: already.id, error: "" };
+
+    const user = {
+      id: uuid(), name: n, email: clean(email), note: clean(note),
+      created_at: nowISO(),
+    };
+    db.users.push(user);
+    const ok = persist();
+    push("users", [user]);
+    return { ok: ok, id: user.id, error: lastError };
+  }
+
+  /** その名刺を交換した社内の人 */
+  function getCardOwner(personId) {
+    const c = getCardOf(personId);
+    return c && c.owner_user_id ? getUser(c.owner_user_id) : null;
+  }
+
+  /** ある利用者が名刺を交換した相手（＝接点のある人物） */
+  function getContactsOfUser(userId) {
+    return db.business_cards
+      .filter((c) => c.owner_user_id === userId)
+      .map((c) => getPerson(c.person_id))
+      .filter(Boolean);
+  }
+
+  /** ある人物と接点がある社内の人（「誰に聞けばよいか」の答え） */
+  function getUsersWhoKnow(personId) {
+    const ids = {};
+    db.business_cards.forEach(function (c) {
+      if (c.person_id === personId && c.owner_user_id) ids[c.owner_user_id] = true;
+    });
+    return Object.keys(ids).map(getUser).filter(Boolean);
+  }
+
+
+  /* --- 共有データベースからの読み込み ------------------------------------- */
+
+  /** スプレッドシートを使う状態にする */
+  function enableShared(on) { sharedMode = on !== false; }
+  const isShared = () => sharedMode;
+
+  /**
+   * スプレッドシートから読み込んで、手元のデータを入れ替える。
+   * 画像そのものはシートに入っていないため、image_path は空のままです
+   * （表示するときに、必要な分だけ取り出します）。
+   */
+  function applyRemote(data) {
+    const next = emptyDB();
+    Object.keys(data || {}).forEach(function (sheetName) {
+      const local = LOCAL_OF[sheetName];
+      if (!local) return;
+      next[local] = Array.isArray(data[sheetName]) ? data[sheetName] : [];
+    });
+
+    // すでに手元にある画像は、そのまま使えるように引き継ぐ
+    const known = {};
+    db.business_cards.forEach(function (c) {
+      if (c.image_path) known[c.id] = c.image_path;
+    });
+    next.business_cards.forEach(function (c) {
+      if (!c.image_path && known[c.id]) c.image_path = known[c.id];
+    });
+
+    db = next;
+    persist();
+    return getStats();
+  }
+
+  /** 画像をドライブへ送ったあと、その置き場所を控える */
+  function noteCardImageId(cardId, fileId) {
+    const c = db.business_cards.find((x) => x.id === cardId);
+    if (c && !c.image_file_id) { c.image_file_id = fileId; persist(); }
+  }
+
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
@@ -611,6 +798,7 @@ const Storage = (function () {
       persons: db.persons.length,
       organizations: db.organizations.length,
       cards: db.business_cards.length,
+      users: db.users.length,
       topics: db.topics.length,
       interactions: db.interactions.length,
       relationships: db.relationships.length,
@@ -642,6 +830,7 @@ const Storage = (function () {
 
   /* --- 外部に公開するもの ------------------------------------------------- */
   load();
+  loadCurrentUser();
 
   return {
     isPersistent: canUseStorage,
@@ -665,6 +854,12 @@ const Storage = (function () {
     RELATIONSHIP_TYPES, relationshipLabel, isDirected,
     getRelationshipsOf, findRelationshipBetween,
     addRelationship, removeRelationship, flipRelationship,
+
+    // 利用者と共有データベース
+    getUsers, getUser, addUser,
+    getCurrentUserId, getCurrentUser, setCurrentUser,
+    getCardOwner, getContactsOfUser, getUsersWhoKnow,
+    enableShared, isShared, applyRemote, noteCardImageId,
 
     // AI検索のための検索関数（Phase 5）
     searchPeopleByTopic, searchPeopleByAttribute, searchPeopleByInteraction,

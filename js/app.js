@@ -497,10 +497,133 @@
 
 
   /* =========================================================================
+     利用者（誰として使うか）
+     ========================================================================= */
+
+  function renderUserBar() {
+    const me = Storage.getCurrentUser();
+    $("userbar").innerHTML = me
+      ? '<div class="ub-name">' + esc(me.name) + "</div>"
+        + '<button class="linkbtn" id="ub-switch">切り替える</button>'
+      : '<button class="btn btn-sm" id="ub-pick">利用者を選ぶ</button>';
+
+    const sw = $("ub-switch"); if (sw) sw.addEventListener("click", openUserPicker);
+    const pk = $("ub-pick");   if (pk) pk.addEventListener("click", openUserPicker);
+  }
+
+  function openUserPicker() {
+    const users = Storage.getUsers();
+    const me = Storage.getCurrentUserId();
+
+    $("user-dialog-body").innerHTML =
+        "<h2>あなたは誰ですか</h2>"
+      + '<p class="note">名刺を登録した人を記録します。'
+      + "人脈グラフで「この人と接点があるのは社内の誰か」を出すために使います。</p>"
+      + (users.length
+        ? '<div class="user-list">' + users.map((u) =>
+            '<button class="user-pick' + (u.id === me ? " is-me" : "") + '" data-user="'
+            + u.id + '">' + esc(u.name)
+            + (u.note ? '<span>' + esc(u.note) + "</span>" : "") + "</button>").join("")
+          + "</div>"
+        : '<p class="empty">まだ誰も登録されていません。</p>')
+      + '<div class="user-add">'
+      +   '<label for="new-user">一覧にない場合</label>'
+      +   '<div class="addrow">'
+      +     '<input type="text" id="new-user" placeholder="氏名">'
+      +     '<input type="text" id="new-user-note" placeholder="所属（任意）">'
+      +     '<button class="btn btn-sm" id="btn-add-user">登録して選ぶ</button>'
+      +   "</div>"
+      + "</div>"
+      + '<p class="note" style="margin-top:14px">'
+      +   "これは認証ではありません。誰として使うかを自分で選ぶ仕組みです。"
+      +   "実際の運用では、ログインの仕組みが必要です。</p>"
+      + '<div class="btn-row"><button class="btn btn-sm" id="btn-close-user">閉じる</button></div>';
+
+    $("user-dialog").hidden = false;
+
+    $("user-dialog-body").querySelectorAll("[data-user]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        Storage.setCurrentUser(b.dataset.user);
+        $("user-dialog").hidden = true;
+        renderUserBar();
+        renderDashboard();
+      });
+    });
+
+    $("btn-add-user").addEventListener("click", function () {
+      const r = Storage.addUser($("new-user").value, "", $("new-user-note").value);
+      if (!r.ok && r.error) { alert(r.error); return; }
+      Storage.setCurrentUser(r.id);
+      $("user-dialog").hidden = true;
+      renderUserBar();
+      renderDashboard();
+    });
+
+    $("btn-close-user").addEventListener("click", function () {
+      $("user-dialog").hidden = true;
+    });
+  }
+
+
+  /* =========================================================================
+     共有データベースとの同期
+     ========================================================================= */
+
+  function renderSyncState(st) {
+    const el = $("syncstate");
+    if (!Storage.isShared()) {
+      el.className = "conn conn-unknown";
+      el.textContent = "この端末の中だけに保存中";
+      return;
+    }
+    if (st.sending) {
+      el.className = "conn conn-warn";
+      el.textContent = "スプレッドシートへ送信中…";
+    } else if (st.pending) {
+      el.className = "conn conn-warn";
+      el.textContent = "未送信 " + st.pending + " 件（自動で送ります）";
+    } else if (st.available === false) {
+      el.className = "conn conn-ng";
+      el.textContent = "▲ 共有できていません：" + (st.error || "");
+    } else {
+      el.className = "conn conn-ok";
+      el.textContent = "● スプレッドシートと同期済み";
+    }
+  }
+
+  /** スプレッドシートから読み直す */
+  async function reload() {
+    if (!Storage.isShared()) return;
+    const btn = $("btn-reload");
+    if (btn) { btn.disabled = true; btn.textContent = "読み込み中…"; }
+    try {
+      const data = await Remote.fetchAll();
+      Storage.applyRemote(data);
+      renderDashboard();
+      renderUserBar();
+    } catch (err) {
+      alert("読み込めませんでした：" + err.message);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = "最新の状態に更新"; }
+  }
+
+  const reloadBtn = $("btn-reload");
+  if (reloadBtn) reloadBtn.addEventListener("click", reload);
+
+
+  /* =========================================================================
      起動時
      ========================================================================= */
 
-  AI.ping().then(function (r) {
+  Remote.onChange(renderSyncState);
+
+  (async function start() {
+    show("dashboard");
+    renderUserBar();
+    renderSyncState(Remote.status());
+
+    // 1. Worker につながるか、共有データベースが使えるかを確かめる
+    const r = await AI.ping();
     const el = $("conn");
     el.className = "conn " + (r.ok ? "conn-ok" : "conn-ng");
     el.textContent = (r.ok ? "● " : "▲ ") + r.message;
@@ -508,7 +631,31 @@
       el.className = "conn conn-warn";
       el.textContent = "▲ Worker が古い版です。worker.js を貼り直してください。";
     }
-  });
 
-  show("dashboard");
+    if (!r.ok || !r.sharedDb) {
+      Storage.enableShared(false);
+      renderSyncState(Remote.status());
+      renderDashboard();
+      return;
+    }
+
+    // 2. 共有データベースを使う
+    Storage.enableShared(true);
+    $("shared-tools").hidden = false;
+
+    // 3. たまっていた未送信分を先に送ってから、最新を読み込む
+    await Remote.flush();
+    try {
+      const data = await Remote.fetchAll();
+      Storage.applyRemote(data);
+    } catch (err) {
+      renderSyncState(Remote.status());
+    }
+
+    renderDashboard();
+    renderUserBar();
+
+    // 4. まだ誰として使うかが決まっていなければ、選んでもらう
+    if (!Storage.getCurrentUser()) openUserPicker();
+  })();
 })();

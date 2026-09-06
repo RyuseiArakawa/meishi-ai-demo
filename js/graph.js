@@ -34,6 +34,7 @@ const Graph = (function () {
     selected: null,   // 選ばれている人物のID
     minStrength: 1,   // これ未満の関係は線を引かない
     showIsolated: true,
+    showUsers: true,  // 社内の利用者を図に載せるか
     pathFrom: "",
     pathTo: "",
     pathIds: [],      // 経路上の人物ID
@@ -84,6 +85,21 @@ const Graph = (function () {
       };
     });
 
+    // 社内の利用者もノードにする（四角で表示する）
+    if (state.showUsers) {
+      Storage.getUsers().forEach(function (u, i) {
+        const prevPos = prev["U:" + u.id] || {
+          x: VIEW_W / 2 + Math.cos(i * 1.7) * 90,
+          y: VIEW_H / 2 + Math.sin(i * 1.7) * 90,
+        };
+        state.nodes.push({
+          id: "U:" + u.id, userId: u.id, name: u.name, isUser: true,
+          org: u.note || "社内", orgId: null, colorIndex: -2,
+          x: prevPos.x, y: prevPos.y, vx: 0, vy: 0, degree: 0,
+        });
+      });
+    }
+
     // 関係を、重複しない形で取り出す
     const seen = {};
     state.links = [];
@@ -103,6 +119,24 @@ const Graph = (function () {
         });
       });
     });
+
+    // 「誰がその名刺を交換したか」を線にする。
+    // これは推測ではなく、名刺を登録したときの記録そのものです。
+    if (state.showUsers) {
+      state.nodes.filter((n) => n.isUser).forEach(function (un) {
+        Storage.getContactsOfUser(un.userId).forEach(function (p) {
+          if (!nodeById(p.id)) return;
+          state.links.push({
+            a: un.id, b: p.id,
+            type: "card_owner",
+            label: "名刺交換（登録記録）",
+            strength: 2,
+            source: "名刺の登録記録",
+            notes: null, directed: false, isOwner: true,
+          });
+        });
+      });
+    }
 
     // つながっている本数を数える（丸の大きさに使う）
     state.links.forEach(function (l) {
@@ -178,7 +212,10 @@ const Graph = (function () {
   }
 
   function visibleLinks() {
-    return state.links.filter((l) => (l.strength || 1) >= state.minStrength);
+    return state.links.filter(function (l) {
+      if (l.isOwner) return true;          // 名刺の登録記録は常に表示する
+      return (l.strength || 1) >= state.minStrength;
+    });
   }
 
   function visibleNodes() {
@@ -278,6 +315,10 @@ const Graph = (function () {
       +   '<label><input type="checkbox" id="g-isolated"'
       +     (state.showIsolated ? " checked" : "") + "> 関係のない人物も表示</label>"
       + "</div>"
+      + '<div class="gctl">'
+      +   '<label><input type="checkbox" id="g-users"'
+      +     (state.showUsers ? " checked" : "") + "> 社内の利用者を表示</label>"
+      + "</div>"
       + '<div class="gctl gctl-path">'
       +   '<label for="g-from">経路をさがす</label>'
       +   '<select id="g-from" class="select">' + options(state.pathFrom) + "</select>"
@@ -294,6 +335,11 @@ const Graph = (function () {
     });
     $("g-isolated").addEventListener("change", function () {
       state.showIsolated = this.checked;
+      render();
+    });
+    $("g-users").addEventListener("change", function () {
+      state.showUsers = this.checked;
+      build();
       render();
     });
     $("g-from").addEventListener("change", function () {
@@ -338,7 +384,8 @@ const Graph = (function () {
       const a = nodeById(l.a), b = nodeById(l.b);
       const key = linkKey(l.a, l.b);
       const isPath = state.pathLinks.indexOf(key) >= 0;
-      const cls = "edge" + (isPath ? " is-path" : (dim ? " is-dim" : ""));
+      const cls = "edge" + (l.isOwner ? " is-owner" : "")
+        + (isPath ? " is-path" : (dim ? " is-dim" : ""));
       const title = esc(a.name) + " ― " + esc(b.name) + "　"
         + esc(l.label) + "　強さ" + l.strength
         + (l.source ? "　根拠：" + esc(l.source) : "");
@@ -354,15 +401,24 @@ const Graph = (function () {
     // --- 丸と名前 ---
     const circles = nodes.map(function (n) {
       const r = 13 + Math.min(9, n.degree * 1.6);
-      const color = n.colorIndex >= 0 ? ORG_COLORS[n.colorIndex % ORG_COLORS.length] : "#8a949c";
-      const cls = "node"
+      const color = n.isUser
+        ? "#16202a"                                  // 社内の利用者は濃い色の四角
+        : (n.colorIndex >= 0 ? ORG_COLORS[n.colorIndex % ORG_COLORS.length] : "#8a949c");
+      const cls = "node" + (n.isUser ? " is-user" : "")
         + (state.selected === n.id ? " is-selected" : "")
         + (onPath[n.id] ? " is-path" : (dim ? " is-dim" : ""));
+
+      // 利用者は四角、外部の人物は丸
+      const shape = n.isUser
+        ? '<rect x="' + (-r) + '" y="' + (-r) + '" width="' + (r * 2) + '" height="'
+          + (r * 2) + '" rx="3" fill="' + color + '"></rect>'
+        : '<circle r="' + r + '" fill="' + color + '"></circle>';
+
       return '<g class="' + cls + '" data-node="' + n.id + '"'
         + ' transform="translate(' + n.x.toFixed(1) + "," + n.y.toFixed(1) + ')">'
-        + "<title>" + esc(n.name) + (n.org ? "（" + esc(n.org) + "）" : "")
-        + "　関係 " + n.degree + " 件</title>"
-        + '<circle r="' + r + '" fill="' + color + '"></circle>'
+        + "<title>" + esc(n.name) + (n.isUser ? "（社内）" : (n.org ? "（" + esc(n.org) + "）" : ""))
+        + "　つながり " + n.degree + " 件</title>"
+        + shape
         + '<text y="' + (r + 15) + '" text-anchor="middle">' + esc(n.name) + "</text>"
         + "</g>";
     }).join("");
@@ -439,6 +495,37 @@ const Graph = (function () {
       return;
     }
 
+    // 社内の利用者を選んだとき
+    if (String(state.selected).indexOf("U:") === 0) {
+      const u = Storage.getUser(state.selected.slice(2));
+      if (u) {
+        const contacts = Storage.getContactsOfUser(u.id);
+        box.innerHTML = head
+          + '<div class="gp-head">'
+          +   '<div class="gp-name">' + esc(u.name) + "</div>"
+          +   '<div class="gp-meta">社内の利用者' + (u.note ? "　／　" + esc(u.note) : "") + "</div>"
+          + "</div>"
+          + "<h3>名刺を交換した相手（" + contacts.length + "）</h3>"
+          + (contacts.length
+            ? '<ul class="gp-rels">' + contacts.map((c) =>
+                "<li>"
+                + '<button class="linkbtn gp-rel-name" data-pick="' + c.id + '">'
+                + esc(c.name) + "</button>"
+                + '<div class="rel-src">' + esc(Storage.getOrganizationName(c.organization_id) || "") + "</div>"
+                + "</li>").join("") + "</ul>"
+            : '<p class="empty">ありません。</p>')
+          + legendHtml();
+
+        box.querySelectorAll("[data-pick]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            state.selected = b.dataset.pick;
+            renderCanvas(); renderPanel();
+          });
+        });
+        return;
+      }
+    }
+
     const p = Storage.getPerson(state.selected);
     if (!p) { state.selected = null; box.innerHTML = head + legendHtml(); return; }
 
@@ -457,6 +544,14 @@ const Graph = (function () {
           + topics.map((t) => '<span class="chip">' + esc(t.name) + "</span>").join("")
           + "</div>"
         : "")
+      + (function () {
+          const knows = Storage.getUsersWhoKnow(p.id);
+          if (!knows.length) return "";
+          return "<h3>社内でこの人と接点がある人</h3>"
+            + '<div class="gp-knows">' + knows.map((u) =>
+                '<span class="knows-chip">' + esc(u.name) + "</span>").join("") + "</div>"
+            + '<p class="note" style="margin:0 0 14px">名刺を登録した記録に基づきます。</p>';
+        })()
       + "<h3>登録されている関係（" + rels.length + "）</h3>"
       + (rels.length
         ? '<ul class="gp-rels">' + rels.map(function (r) {
@@ -502,6 +597,8 @@ const Graph = (function () {
 
     return '<div class="gp-legend">'
       + "<h3>凡例</h3>"
+      + '<div class="lg-row"><span class="lg-sq"></span>社内の利用者（四角）</div>'
+      + '<div class="lg-row"><span class="lg-line lg-owner"></span>名刺交換（登録記録）</div>'
       + '<div class="lg-row"><span class="lg-line lg-thin"></span>強さ1〜2（点線）</div>'
       + '<div class="lg-row"><span class="lg-line lg-thick"></span>強さ3〜5（実線・太いほど強い）</div>'
       + '<p class="note" style="margin:6px 0 10px">'

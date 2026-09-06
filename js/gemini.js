@@ -244,6 +244,7 @@ const AI = (function () {
           message: "接続できました（モデル: " + json.model + "）",
           multi: json.multi === true,
           aiSearch: json.ai_search === true,
+          sharedDb: json.shared_db === true,
         };
       }
       return { ok: false, message: json.error || "応答が想定と違います。" };

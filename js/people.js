@@ -133,9 +133,13 @@ const People = (function () {
       p.department, p.job_title,
     ].filter(Boolean).join("　／　");
 
+    const thumb = card
+      ? (card.image_path || (window.Remote && Remote.cachedImage(card.image_file_id)))
+      : null;
+
     return '<button class="prow" data-screen="person" data-id="' + p.id + '">'
-      + (card && card.image_path
-          ? '<img class="prow-thumb" src="' + card.image_path + '" alt="">'
+      + (thumb
+          ? '<img class="prow-thumb" src="' + thumb + '" alt="">'
           : '<span class="prow-thumb prow-noimg" aria-hidden="true">名刺</span>')
       + '<span class="prow-body">'
       +   '<span class="prow-name">' + esc(p.name) + "</span>"
@@ -297,6 +301,8 @@ const People = (function () {
     }
 
     const card = Storage.getCardOf(p.id);
+    const owner = Storage.getCardOwner(p.id);
+    const knows = Storage.getUsersWhoKnow(p.id);
     const org = Storage.getOrganizationName(p.organization_id);
     const topics = Storage.getTopicsOf(p.id);
     const logs = Storage.getInteractionsOf(p.id);
@@ -319,6 +325,13 @@ const People = (function () {
       +     (detail.editing ? "編集をやめる" : "編集する") + "</button>"
       + "</div>"
 
+      + (knows.length
+        ? '<div class="knows-bar">'
+          + "<span>社内でこの人と接点がある人</span>"
+          + knows.map((u) => '<span class="knows-chip">' + esc(u.name) + "</span>").join("")
+          + "</div>"
+        : "")
+
       + '<div class="pdetail-grid">'
 
       /* ---- 左：基本情報 ---- */
@@ -329,12 +342,10 @@ const People = (function () {
 
       /* ---- 右：名刺画像 ---- */
       +   "<div>"
-      +     (card && card.image_path
-            ? '<img class="cardshot" src="' + card.image_path + '" alt="'
-              + esc(p.name) + 'さんの名刺">'
-            : '<div class="noimg-box">名刺画像はありません</div>')
+      +     cardImageHtml(card, p)
       +     '<p class="note" style="margin-top:8px">登録日：'
-            + esc(String(p.created_at || "").slice(0, 10)) + "</p>"
+            + esc(String(p.created_at || "").slice(0, 10))
+            + (owner ? "　／　登録した人：" + esc(owner.name) : "") + "</p>"
       +   "</div>"
       + "</div>"
 
@@ -422,6 +433,38 @@ const People = (function () {
       + "</section>";
 
     wireDetail(p);
+  }
+
+  /**
+   * 名刺画像の表示。
+   * 共有データベースを使っているときは画像がドライブにあるため、
+   * この画面を開いたときに取り出します（一覧では取りに行きません）。
+   */
+  function cardImageHtml(card, p) {
+    if (!card) return '<div class="noimg-box">名刺画像はありません</div>';
+
+    const ready = card.image_path
+      || (window.Remote && Remote.cachedImage(card.image_file_id));
+
+    if (ready) {
+      return '<img class="cardshot" id="card-img" src="' + ready + '" alt="'
+        + esc(p.name) + 'さんの名刺">';
+    }
+    if (card.image_file_id && window.Remote) {
+      // 先に枠だけ出して、あとから差し替える
+      setTimeout(function () {
+        Remote.getImage(card.image_file_id).then(function (dataUrl) {
+          const el = $("card-img-box");
+          if (el && dataUrl) {
+            el.outerHTML = '<img class="cardshot" src="' + dataUrl + '" alt="">';
+          } else if (el) {
+            el.textContent = "名刺画像を取り出せませんでした";
+          }
+        });
+      }, 0);
+      return '<div class="noimg-box" id="card-img-box">名刺画像を読み込んでいます…</div>';
+    }
+    return '<div class="noimg-box">名刺画像はありません</div>';
   }
 
   function readOnlyHtml(p) {
