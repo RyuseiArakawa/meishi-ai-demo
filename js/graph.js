@@ -40,7 +40,15 @@ const Graph = (function () {
     pathIds: [],      // 経路上の人物ID
     pathLinks: [],    // 経路上の関係のキー
     message: "",
+
+    // いま見えている範囲（拡大縮小と移動に使う）
+    view: { x: 0, y: 0, w: VIEW_W, h: VIEW_H },
+    spacing: 1,       // ノードの間隔（0.7=せまい / 1=ふつう / 1.4=ひろい）
   };
+
+  // 図を描く場所の広さ。間隔を広げると、この範囲も広がる。
+  const areaW = () => VIEW_W * state.spacing;
+  const areaH = () => VIEW_H * state.spacing;
 
   const nodeById = (id) => state.nodes.find((n) => n.id === id);
   const linkKey = (a, b) => [a, b].sort().join("|");
@@ -52,6 +60,7 @@ const Graph = (function () {
 
   function enter() {
     build();
+    resetView();
     render();
   }
 
@@ -89,8 +98,8 @@ const Graph = (function () {
     if (state.showUsers) {
       Storage.getUsers().forEach(function (u, i) {
         const prevPos = prev["U:" + u.id] || {
-          x: VIEW_W / 2 + Math.cos(i * 1.7) * 90,
-          y: VIEW_H / 2 + Math.sin(i * 1.7) * 90,
+          x: areaW() / 2 + Math.cos(i * 1.7) * 90 * state.spacing,
+          y: areaH() / 2 + Math.sin(i * 1.7) * 90 * state.spacing,
         };
         state.nodes.push({
           id: "U:" + u.id, userId: u.id, name: u.name, isUser: true,
@@ -175,7 +184,7 @@ const Graph = (function () {
           let d2 = dx * dx + dy * dy;
           if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
           const d = Math.sqrt(d2);
-          const force = 9000 / d2;
+          const force = (9000 * state.spacing * state.spacing) / d2;
           const fx = (dx / d) * force, fy = (dy / d) * force;
           a.vx -= fx; a.vy -= fy;
           b.vx += fx; b.vy += fy;
@@ -186,7 +195,7 @@ const Graph = (function () {
       links.forEach(function (l) {
         const a = nodeById(l.a), b = nodeById(l.b);
         if (!a || !b) return;
-        const rest = 190 - l.strength * 16;
+        const rest = (190 - l.strength * 16) * state.spacing;
         let dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
         const force = (d - rest) * 0.05;
@@ -196,9 +205,10 @@ const Graph = (function () {
       });
 
       // 中央へ寄せる
+      const cx = areaW() / 2, cy = areaH() / 2;
       nodes.forEach(function (nd) {
-        nd.vx += (VIEW_W / 2 - nd.x) * 0.012;
-        nd.vy += (VIEW_H / 2 - nd.y) * 0.012;
+        nd.vx += (cx - nd.x) * 0.012;
+        nd.vy += (cy - nd.y) * 0.012;
       });
 
       // 動かす（つかんでいる丸は指の位置のまま）
@@ -208,8 +218,8 @@ const Graph = (function () {
         nd.y += nd.vy * 0.4 * cooling;
         nd.vx *= 0.82; nd.vy *= 0.82;
         const m = 46;
-        nd.x = Math.max(m, Math.min(VIEW_W - m, nd.x));
-        nd.y = Math.max(m, Math.min(VIEW_H - m, nd.y));
+        nd.x = Math.max(m, Math.min(areaW() - m, nd.x));
+        nd.y = Math.max(m, Math.min(areaH() - m, nd.y));
       });
     }
   }
@@ -319,6 +329,20 @@ const Graph = (function () {
       +     (state.showIsolated ? " checked" : "") + "> 関係のない人物も表示</label>"
       + "</div>"
       + '<div class="gctl">'
+      +   '<label for="g-spacing">間隔</label>'
+      +   '<select id="g-spacing" class="select select-sm">'
+      +     [["0.7","せまい"],["1","ふつう"],["1.4","ひろい"],["1.9","とても広い"]]
+            .map((o) => '<option value="' + o[0] + '"'
+              + (String(state.spacing) === o[0] ? " selected" : "") + ">" + o[1] + "</option>").join("")
+      +   "</select>"
+      + "</div>"
+      + '<div class="gctl gctl-zoom">'
+      +   '<button class="zbtn" id="g-zoom-out" aria-label="縮小">−</button>'
+      +   '<span class="zlevel" id="g-zoom-level">100%</span>'
+      +   '<button class="zbtn" id="g-zoom-in" aria-label="拡大">＋</button>'
+      +   '<button class="btn btn-sm" id="g-zoom-reset">全体</button>'
+      + "</div>"
+      + '<div class="gctl">'
       +   '<label><input type="checkbox" id="g-users"'
       +     (state.showUsers ? " checked" : "") + "> 社内の利用者を表示</label>"
       + "</div>"
@@ -345,6 +369,21 @@ const Graph = (function () {
       build();
       render();
     });
+
+    // 間隔を変える。いまの配置を伸び縮みさせてから、計算をやり直す。
+    $("g-spacing").addEventListener("change", function () {
+      const next = Number(this.value);
+      const ratio = next / state.spacing;
+      state.nodes.forEach(function (n) { n.x *= ratio; n.y *= ratio; });
+      state.spacing = next;
+      simulate(220);
+      resetView();
+      render();
+    });
+
+    $("g-zoom-in").addEventListener("click", function () { zoomBy(1.25); });
+    $("g-zoom-out").addEventListener("click", function () { zoomBy(1 / 1.25); });
+    $("g-zoom-reset").addEventListener("click", resetView);
     $("g-from").addEventListener("change", function () {
       state.pathFrom = this.value; applyPath(); render();
     });
@@ -427,7 +466,7 @@ const Graph = (function () {
     }).join("");
 
     $("graph-canvas").innerHTML =
-        '<svg viewBox="0 0 ' + VIEW_W + " " + VIEW_H + '" class="graph-svg"'
+        '<svg viewBox="' + viewBoxStr() + '" class="graph-svg"'
       + ' role="img" aria-label="人物の関係図">'
       + '<g class="edges">' + edges + "</g>"
       + '<g class="nodes">' + circles + "</g>"
@@ -445,15 +484,70 @@ const Graph = (function () {
      つかんだ丸のまわりがばねのように追従します。
      ------------------------------------------------------------------------- */
 
+  /* --- 拡大縮小と移動 -------------------------------------------------------
+
+     図そのものは作り直さず、「どこを見ているか」だけを書き換えます。
+     SVG の viewBox という指定で、表示する範囲を決められます。
+     範囲を狭めれば拡大、広げれば縮小になります。
+     ------------------------------------------------------------------------- */
+
+  const MIN_ZOOM = 0.35;   // これ以上は縮小しない
+  const MAX_ZOOM = 4;      // これ以上は拡大しない
+
+  const viewBoxStr = () =>
+    state.view.x.toFixed(1) + " " + state.view.y.toFixed(1) + " "
+    + state.view.w.toFixed(1) + " " + state.view.h.toFixed(1);
+
+  /** いまの倍率（1 = 全体が見えている状態） */
+  const zoomLevel = () => areaW() / state.view.w;
+
+  /** 全体が見える状態に戻す */
+  function resetView() {
+    state.view = { x: 0, y: 0, w: areaW(), h: areaH() };
+    applyView();
+  }
+
+  /** 見ている範囲だけを書き換える（作り直さない） */
+  function applyView() {
+    if (svgEl) svgEl.setAttribute("viewBox", viewBoxStr());
+    const label = $("g-zoom-level");
+    if (label) label.textContent = Math.round(zoomLevel() * 100) + "%";
+  }
+
+  /**
+   * 拡大・縮小する。
+   * @param factor  1より大きいと拡大
+   * @param cx,cy   この点を動かさないようにする（マウスの位置）
+   */
+  function zoomBy(factor, cx, cy) {
+    const v = state.view;
+    const now = zoomLevel();
+    let next = now * factor;
+    next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next));
+    if (Math.abs(next - now) < 0.0001) return;
+
+    const w = areaW() / next, h = areaH() / next;
+    const px = (cx === undefined) ? v.x + v.w / 2 : cx;
+    const py = (cy === undefined) ? v.y + v.h / 2 : cy;
+
+    // マウスの下にある点が動かないように、左上の位置を決め直す
+    v.x = px - (px - v.x) * (w / v.w);
+    v.y = py - (py - v.y) * (h / v.h);
+    v.w = w; v.h = h;
+    applyView();
+  }
+
   let svgEl = null;
   let nodeEls = {};     // 人物ID → 丸のまとまり
   let edgeEls = [];     // { a, b, line }
   let dragging = null;
+  let panning = null;
   let moved = false;
   let raf = 0;
 
   function collectElements() {
     svgEl = $("graph-canvas").querySelector("svg");
+    applyView();
     nodeEls = {};
     edgeEls = [];
     if (!svgEl) return;
@@ -496,17 +590,35 @@ const Graph = (function () {
     collectElements();
     if (!svgEl) return;
 
+    // 画面上の位置を、図の中の座標に直す
     function toSvgPoint(evt) {
       const rect = svgEl.getBoundingClientRect();
       return {
-        x: ((evt.clientX - rect.left) / rect.width) * VIEW_W,
-        y: ((evt.clientY - rect.top) / rect.height) * VIEW_H,
+        x: state.view.x + ((evt.clientX - rect.left) / rect.width) * state.view.w,
+        y: state.view.y + ((evt.clientY - rect.top) / rect.height) * state.view.h,
       };
     }
 
+    // マウスホイールで拡大・縮小
+    svgEl.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      const p = toSvgPoint(e);
+      // 下に回すと縮小、上に回すと拡大
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y);
+    }, { passive: false });
+
     svgEl.addEventListener("pointerdown", function (e) {
       const g = e.target.closest("[data-node]");
-      if (!g) return;
+
+      // 何もないところをつかんだら、図全体を動かす
+      if (!g) {
+        panning = { x: e.clientX, y: e.clientY,
+                    vx: state.view.x, vy: state.view.y };
+        if (svgEl.setPointerCapture) svgEl.setPointerCapture(e.pointerId);
+        svgEl.classList.add("is-panning");
+        return;
+      }
+
       dragging = nodeById(g.dataset.node);
       moved = false;
       if (svgEl.setPointerCapture) svgEl.setPointerCapture(e.pointerId);
@@ -515,6 +627,13 @@ const Graph = (function () {
     });
 
     svgEl.addEventListener("pointermove", function (e) {
+      if (panning) {
+        const rect = svgEl.getBoundingClientRect();
+        state.view.x = panning.vx - (e.clientX - panning.x) / rect.width * state.view.w;
+        state.view.y = panning.vy - (e.clientY - panning.y) / rect.height * state.view.h;
+        applyView();
+        return;
+      }
       if (!dragging) return;
       const p = toSvgPoint(e);
       dragging.x = p.x;
@@ -524,6 +643,7 @@ const Graph = (function () {
     });
 
     function end() {
+      if (panning) { panning = null; svgEl.classList.remove("is-panning"); }
       if (!dragging) return;
       const wasClick = !moved;
       const id = dragging.id;
