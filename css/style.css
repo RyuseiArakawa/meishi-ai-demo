@@ -960,16 +960,20 @@ input[type=text], input[type=date], input[type=search], select {
   .chat-form { padding-right: 13px; }   /* 取っ手が無いので右の余白は不要 */
 }
 
+/* 質問候補。横に並べきれないので折り返す。
+   横スクロールにすると、切れているだけに見えて気づけないため。 */
 .chat-suggest {
   flex: none;
-  display: flex; gap: 6px; overflow-x: auto; padding: 9px 13px 0;
-  scrollbar-width: none;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 10px 13px 2px;
+  max-height: 96px; overflow-y: auto;
 }
-.chat-suggest::-webkit-scrollbar { display: none; }
+.chat-suggest:empty { display: none; }
 .sg {
-  appearance: none; flex: none; border: 1px solid var(--rule2);
+  appearance: none; border: 1px solid var(--rule2);
   background: var(--paper); color: var(--ink2); font-size: 12px;
-  padding: 4px 11px; border-radius: 13px; cursor: pointer; white-space: nowrap;
+  padding: 4px 11px; border-radius: 13px; cursor: pointer;
+  max-width: 100%; text-align: left; line-height: 1.5;
 }
 .sg:hover { border-color: var(--accent); color: var(--accent); }
 

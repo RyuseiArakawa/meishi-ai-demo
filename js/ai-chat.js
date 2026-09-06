@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 13;
+(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 14;
 
 /* =============================================================================
    AIチャット（Phase 5）
@@ -63,21 +63,21 @@ const AIChat = (function () {
       const p = Storage.getPerson(id);
       if (p) {
         const nm = String(p.name).split(/[ 　]/)[0];
-        out.push(nm + "さんとはどんなつながり？");
-        out.push(nm + "さんを紹介してもらうには？");
+        out.push(nm + "さんとのつながりは？");
+        out.push(nm + "さんへの紹介は？");
       }
     });
 
     // 登録されている専門分野から、実際に答えが出るものを選ぶ
     const topics = Storage.getAllTopics();
-    for (let i = 0; i < topics.length && out.length < 4; i++) {
+    for (let i = 0; i < topics.length && out.length < 3; i++) {
       const t = topics[(i * 7 + messages.length) % topics.length];
-      const q = t.name + "に詳しい人は？";
+      const q = t.name + "に詳しい人";
       if (out.indexOf(q) < 0) out.push(q);
     }
 
     // この1つは必ず残す（何を聞けるか分からないときの入口になるため）
-    return out.slice(0, 4).concat(["何ができますか？"]);
+    return out.slice(0, 3).concat(["何ができますか？"]);
   }
 
 
