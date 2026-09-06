@@ -565,6 +565,15 @@
   }
 
 
+  // 小窓の外側を押しても閉じられるようにする（操作できなくならないように）
+  $("user-dialog").addEventListener("click", function (e) {
+    if (e.target && e.target.id === "user-dialog") $("user-dialog").hidden = true;
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") $("user-dialog").hidden = true;
+  });
+
+
   /* =========================================================================
      共有データベースとの同期
      ========================================================================= */

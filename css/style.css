@@ -28,6 +28,11 @@
 
 * { box-sizing: border-box; }
 
+/* hidden が付いた要素は必ず隠す。
+   このファイルの中で display を指定している要素（.dialog など）は、
+   その指定が hidden より強く効いてしまうため、ここで打ち消しておく。 */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   display: flex;
