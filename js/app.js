@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 13;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 14;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -191,6 +191,15 @@
     let done = 0;
     setProgress("読み取っています（0 / " + pages.length + "）", 0, pages.length);
 
+    // 1分あたりの上限があるため、枚数が多いと時間がかかります
+    const est = AI.estimateSeconds(pages.length);
+    if (est > 30) {
+      $("progress-detail").textContent =
+        "利用上限を超えないよう間隔をあけて送ります。目安 約"
+        + Math.ceil(est / 60) + " 分（" + pages.length + " 枚）。";
+    }
+
+    try {
     await AI.readPages(
       pages,
       function (i, cards, page) {                    // 成功
@@ -217,8 +226,22 @@
         addThumb(page.thumb, -1);
         setProgress("読み取っています（" + done + " / " + pages.length + "）", done, pages.length);
         $("progress-detail").textContent = "一部のページで失敗しました：" + message;
+      },
+      function (waitMessage) {                       // 待っているとき
+        if (waitMessage) setProgress(waitMessage);
+        else setProgress("読み取っています（" + done + " / " + pages.length + "）",
+                         done, pages.length);
       }
     );
+    } catch (err) {
+      // 1日の上限に達した場合は、ここで打ち切る
+      if (batch.items.length) {
+        $("progress-detail").textContent = err.message;
+      } else {
+        captureError(err.message);
+        return;
+      }
+    }
 
     // --- 3. 結果へ ---
     if (!batch.items.length) {

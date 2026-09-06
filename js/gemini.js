@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["gemini"] = 14;
+
 /* =============================================================================
    AIへの問い合わせと、画像の準備
 
@@ -107,6 +110,35 @@ const AI = (function () {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  /* --- 送りすぎないようにする ---------------------------------------------
+
+     無料枠には「1分あたりの回数」の上限があります（多くのモデルで10〜15回）。
+     一気に送ると上限に当たり、しばらく使えなくなります。
+     そこで、前回の送信からの間隔をあけてから送ります。
+     ------------------------------------------------------------------------ */
+
+  let lastSentAt = 0;
+
+  const rpm = () => Math.max(1, Number(
+    (window.APP_CONFIG && window.APP_CONFIG.REQUESTS_PER_MINUTE) || 10));
+
+  /** 次に送れるようになるまでの待ち時間（ミリ秒） */
+  function waitNeeded() {
+    const gap = 60000 / rpm();
+    return Math.max(0, lastSentAt + gap - Date.now());
+  }
+
+  /** 間隔があくまで待つ。待っている間は onWait に残り秒数を伝える。 */
+  async function pace(onWait) {
+    let left = waitNeeded();
+    while (left > 0) {
+      if (onWait) onWait(Math.ceil(left / 1000));
+      await sleep(Math.min(1000, left));
+      left = waitNeeded();
+    }
+    lastSentAt = Date.now();
+  }
+
   function endpoint() {
     return (window.APP_CONFIG && window.APP_CONFIG.API_ENDPOINT) || "";
   }
@@ -149,12 +181,10 @@ const AI = (function () {
     }
 
     if (!res.ok || !json.ok) {
-      // 利用上限に当たったときは、少し待って1回だけやり直す
-      if (json && json.status === 429 && attempt < 2) {
-        await sleep(4000);
-        return readPage(sendDataUrl, attempt + 1);
-      }
-      throw new Error(json.error || "サーバーがエラーを返しました（" + res.status + "）");
+      const err = new Error(json.error || "サーバーがエラーを返しました（" + res.status + "）");
+      err.limit = json && json.limit;               // "rate" か "daily"
+      err.retryAfter = (json && json.retryAfter) || null;
+      throw err;
     }
 
     // 新しい形（複数枚）と、古い形（1枚だけ）のどちらでも受け取れるようにする
@@ -171,18 +201,48 @@ const AI = (function () {
    * @param onEach    1件終わるたびに呼ばれる (index, 結果, ページ情報)
    * @param onError   失敗したときに呼ばれる (index, メッセージ, ページ情報)
    */
-  async function readPages(pages, onEach, onError) {
+  async function readPages(pages, onEach, onError, onWait) {
     for (let i = 0; i < pages.length; i++) {
-      try {
-        const cards = await readPage(pages[i].send);
-        if (onEach) onEach(i, cards, pages[i]);
-      } catch (err) {
-        if (onError) onError(i, err.message, pages[i]);
+      // 1分あたりの上限を超えないよう、間隔をあける
+      await pace(function (sec) {
+        if (onWait) onWait("次の1枚まで " + sec + " 秒待っています（1分あたりの上限を超えないため）");
+      });
+      if (onWait) onWait("");
+
+      let done = false;
+      for (let tries = 0; tries < 3 && !done; tries++) {
+        try {
+          const cards = await readPage(pages[i].send);
+          if (onEach) onEach(i, cards, pages[i]);
+          done = true;
+        } catch (err) {
+          // 1日の上限は待っても直らないので、ここで打ち切る
+          if (err.limit === "daily") {
+            if (onError) onError(i, err.message, pages[i]);
+            const stop = new Error(err.message);
+            stop.limit = "daily";
+            throw stop;
+          }
+          // 1分の上限なら、待ってからやり直す
+          if (err.limit === "rate" && tries < 2) {
+            const wait = err.retryAfter || (tries === 0 ? 20 : 45);
+            for (let s = wait; s > 0; s--) {
+              if (onWait) onWait("利用上限に当たりました。" + s + " 秒待ってから続けます");
+              await sleep(1000);
+            }
+            if (onWait) onWait("");
+            lastSentAt = 0;
+            continue;
+          }
+          if (onError) onError(i, err.message, pages[i]);
+          done = true;
+        }
       }
-      // 続けて投げすぎないよう、少し間を空ける
-      if (i < pages.length - 1) await sleep(400);
     }
   }
+
+  /** 何枚読むのに、どれくらいかかるかの目安（秒） */
+  const estimateSeconds = (count) => Math.round((count - 1) * (60 / rpm()));
 
 
   /* --- AI検索（Phase 5） --------------------------------------------------
@@ -219,9 +279,16 @@ const AI = (function () {
     return json;
   }
 
-  /** 質問から検索語を取り出す */
-  function readIntent(question) {
-    return post({ mode: "intent", question: question });
+  /* 同じ質問の「解釈」は毎回同じなので、一度聞いた分は覚えておきます。
+     「もう一度聞く」を押したときに、無駄に回数を使わないためです。 */
+  const intentCache = {};
+
+  async function readIntent(question) {
+    const key = String(question).trim();
+    if (intentCache[key]) return intentCache[key];
+    const r = await post({ mode: "intent", question: key });
+    intentCache[key] = r;
+    return r;
   }
 
   /** 検索結果だけを根拠に回答を作る */
@@ -261,6 +328,7 @@ const AI = (function () {
     readPage: readPage,
     readPages: readPages,
     readIntent: readIntent,
+    estimateSeconds: estimateSeconds,
     askAnswer: askAnswer,
     ping: ping,
   };
