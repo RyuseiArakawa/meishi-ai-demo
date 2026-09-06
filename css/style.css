@@ -20,7 +20,6 @@
   --accent-bg: #f7ebe8;
   --ok:        #2b6b53;
   --ok-bg:     #e9f2ee;
-  --warn:      #8a6420;
 
   --gothic: -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic Medium",
             "Yu Gothic", "Noto Sans JP", "Meiryo", sans-serif;
@@ -103,7 +102,7 @@ button { font-family: inherit; font-size: inherit; }
 
 .content { flex: 1; padding: 30px 34px 70px; max-width: 1180px; min-width: 0; }
 
-.page-head { margin-bottom: 22px; }
+.page-head { margin-bottom: 20px; }
 .page-head h1 {
   font-family: var(--mincho); font-weight: 600; font-size: 25px;
   letter-spacing: .03em; margin: 0;
@@ -112,6 +111,9 @@ button { font-family: inherit; font-size: inherit; }
 
 h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 .note { color: var(--muted); font-size: 12.5px; line-height: 1.65; max-width: 68ch; }
+.count { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+.empty { color: var(--muted); font-size: 13px; padding: 4px 0; margin: 0; }
+.backline { margin: 0 0 12px; }
 
 
 /* ===== 部品 =============================================================== */
@@ -132,7 +134,7 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 
 .linkbtn {
   appearance: none; border: 0; background: none; color: var(--accent);
-  font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline;
+  font-size: 13px; cursor: pointer; padding: 0; text-decoration: underline;
 }
 
 .alert { padding: 11px 14px; border-radius: 0 3px 3px 0; font-size: 13.5px; margin-bottom: 16px; }
@@ -141,14 +143,25 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 
 .block {
   background: var(--paper); border: 1px solid var(--rule);
-  border-radius: 3px; padding: 18px 20px; margin-top: 18px;
+  border-radius: 3px; padding: 18px 20px; margin-bottom: 16px;
+}
+
+.empty-box {
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 3px;
+  padding: 34px 20px; text-align: center; color: var(--muted);
+}
+.empty-box p { margin: 0 0 14px; }
+
+input[type=text], input[type=date], input[type=search], select {
+  padding: 8px 10px; border: 1px solid var(--rule2); border-radius: 3px;
+  background: var(--paper); font-family: inherit; font-size: 14.5px; color: var(--ink);
 }
 
 
 /* ===== ダッシュボード ===================================================== */
 
 .stat-strip {
-  display: flex; flex-wrap: wrap; gap: 30px;
+  display: flex; flex-wrap: wrap; gap: 28px;
   background: var(--paper); border: 1px solid var(--rule);
   border-radius: 3px; padding: 15px 20px; margin-bottom: 18px;
 }
@@ -178,12 +191,15 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 .menu-card.is-locked h2, .menu-card.is-locked p { color: var(--muted); }
 .menu-card .phase { color: var(--muted); border-color: var(--rule2); }
 
-.person-row { padding: 11px 0; border-bottom: 1px solid var(--rule); }
-.person-row:last-child { border-bottom: 0; }
+.person-row {
+  display: block; width: 100%; text-align: left; appearance: none;
+  border: 0; border-bottom: 1px solid var(--rule); background: none;
+  padding: 10px 0; cursor: pointer; font: inherit; color: inherit;
+}
+.person-row:hover { background: #f7f9fa; }
 .person-name { font-family: var(--mincho); font-size: 16px; font-weight: 600; }
 .person-kana { font-size: 11.5px; color: var(--muted); margin-left: 8px; }
-.person-meta { font-size: 12.5px; color: var(--ink2); }
-.empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+.person-meta { display: block; font-size: 12.5px; color: var(--ink2); }
 
 
 /* ===== 名刺登録 =========================================================== */
@@ -199,12 +215,11 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 .dz-title { font-family: var(--mincho); font-size: 16.5px; font-weight: 600; color: var(--ink); }
 .dz-sub { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
 
-/* 読み取り中 */
 .reading {
   background: var(--paper); border: 1px solid var(--rule);
   border-radius: 3px; padding: 18px 20px; margin-bottom: 16px;
 }
-.progress-head { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink); }
+.progress-head { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .progress-track {
   height: 5px; background: var(--field); border-radius: 3px;
   overflow: hidden; margin: 12px 0 8px;
@@ -220,10 +235,7 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 
-.thumb-strip {
-  display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 4px;
-  scrollbar-width: thin;
-}
+.thumb-strip { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 4px; }
 .thumb { flex: none; width: 92px; text-align: center; }
 .thumb img {
   width: 92px; height: 58px; object-fit: cover;
@@ -239,6 +251,10 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
   display: block; width: 100%; max-width: 330px; border-radius: 3px;
   box-shadow: 0 1px 0 var(--rule2), 0 6px 16px rgba(22, 32, 42, .17);
 }
+.noimg-box {
+  border: 1px dashed var(--rule2); border-radius: 3px; background: var(--field);
+  padding: 40px 16px; text-align: center; color: var(--muted); font-size: 12.5px;
+}
 
 
 /* ===== 確認画面 =========================================================== */
@@ -249,17 +265,15 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 
 @media (max-width: 1100px) {
   .confirm-layout.is-batch { grid-template-columns: 236px 1fr; }
-  .confirm-layout.is-batch .confirm-image { grid-column: 2; }
+  .confirm-layout.is-batch .confirm-image,
   .confirm-layout.is-batch .confirm-fields { grid-column: 2; }
 }
 @media (max-width: 820px) {
-  .confirm-layout,
-  .confirm-layout.is-batch { grid-template-columns: 1fr; }
+  .confirm-layout, .confirm-layout.is-batch { grid-template-columns: 1fr; }
   .confirm-layout.is-batch .confirm-image,
   .confirm-layout.is-batch .confirm-fields { grid-column: 1; }
 }
 
-/* 複数枚のときの一覧 */
 .batch-list {
   background: var(--paper); border: 1px solid var(--rule);
   border-radius: 3px; overflow: hidden;
@@ -270,6 +284,7 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
   padding: 10px 12px; border-bottom: 1px solid var(--rule);
   font-size: 12px; color: var(--ink2); background: var(--field);
 }
+.batch-head .linkbtn { font-size: 12px; }
 #batch-items { overflow-y: auto; }
 
 .bitem {
@@ -289,10 +304,7 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
   font-family: var(--mincho); font-size: 14px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.borg {
-  font-size: 11px; color: var(--muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+.borg { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .legend { margin-top: 14px; display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
@@ -310,6 +322,7 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
   display: grid; grid-template-columns: 104px 1fr 46px; gap: 0 12px;
   align-items: center; border-bottom: 1px solid var(--rule); padding: 8px 0;
 }
+.lrow-edit { grid-template-columns: 116px 1fr; }
 .lrow label { font-size: 12.5px; color: var(--ink2); }
 .lrow input {
   width: 100%; padding: 7px 9px; border: 1px solid transparent; border-radius: 3px;
@@ -349,6 +362,101 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
 .done .btn-row { justify-content: center; margin-top: 22px; }
 
 
+/* ===== 人物一覧（Phase 2） =============================================== */
+
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.search { flex: 1; min-width: 220px; }
+.select { min-width: 150px; }
+
+.prow {
+  display: grid; grid-template-columns: 74px 1fr; gap: 14px;
+  width: 100%; text-align: left; appearance: none; font: inherit; color: inherit;
+  background: var(--paper); border: 1px solid var(--rule); border-left: 3px solid var(--rule2);
+  border-radius: 3px; padding: 12px 16px; margin-bottom: 8px; cursor: pointer;
+  align-items: center;
+}
+.prow:hover { border-left-color: var(--accent); background: #fbfcfc; }
+.prow-thumb {
+  width: 74px; height: 46px; object-fit: cover;
+  border: 1px solid var(--rule2); border-radius: 2px; display: block;
+}
+.prow-noimg {
+  display: grid; place-items: center; background: var(--field);
+  color: var(--rule2); font-size: 11px; border-style: dashed;
+}
+.prow-body { min-width: 0; display: block; }
+.prow-name { font-family: var(--mincho); font-size: 17px; font-weight: 600; }
+.prow-kana { font-size: 11.5px; color: var(--muted); margin-left: 8px; }
+.prow-meta { display: block; font-size: 12.5px; color: var(--ink2); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--field); border: 1px solid var(--rule);
+  border-radius: 2px; padding: 1px 8px; font-size: 11.5px; color: var(--ink2);
+}
+.chips-lg { margin: 0 0 14px; gap: 7px; }
+.chips-lg .chip { font-size: 13px; padding: 4px 10px; }
+.chip-src { font-size: 10.5px; color: var(--muted); border-left: 1px solid var(--rule2); padding-left: 6px; }
+.chip-del button {
+  appearance: none; border: 0; background: none; color: var(--muted);
+  cursor: pointer; padding: 0 0 0 2px; font-size: 14px; line-height: 1;
+}
+.chip-del button:hover { color: var(--accent); }
+
+
+/* ===== 人物詳細（Phase 2） =============================================== */
+
+.pdetail-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; margin-bottom: 18px;
+}
+.pdetail-name { font-family: var(--mincho); font-size: 28px; font-weight: 600; margin: 0; }
+.pdetail-kana { font-size: 12px; color: var(--muted); }
+.pdetail-meta { font-size: 13.5px; color: var(--ink2); margin-top: 4px; }
+
+.pdetail-grid { display: grid; grid-template-columns: 1fr 330px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .pdetail-grid { grid-template-columns: 1fr; } }
+
+.kv { margin: 0; border-top: 1px solid var(--rule); }
+.kv div {
+  display: grid; grid-template-columns: 116px 1fr; gap: 14px;
+  border-bottom: 1px solid var(--rule); padding: 7px 0; font-size: 14px;
+}
+.kv dt { color: var(--muted); font-size: 12.5px; margin: 0; }
+.kv dd { margin: 0; word-break: break-all; }
+
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.addrow input { flex: 1; min-width: 150px; }
+.addrow-log input[type=date] { flex: 0 0 auto; min-width: 0; }
+
+.timeline { list-style: none; margin: 0 0 14px; padding: 0; }
+.timeline li {
+  position: relative; border-left: 2px solid var(--rule2);
+  padding: 0 60px 14px 14px; margin-left: 4px;
+}
+.timeline li:last-child { padding-bottom: 4px; }
+.timeline time { font-size: 11.5px; color: var(--muted); display: block; }
+.tl-title { font-size: 14px; }
+.tl-body { font-size: 12.5px; color: var(--ink2); }
+.tl-del {
+  position: absolute; top: 0; right: 0;
+  appearance: none; border: 0; background: none; color: var(--muted);
+  font-size: 11.5px; cursor: pointer; text-decoration: underline;
+}
+.tl-del:hover { color: var(--accent); }
+
+.mates { display: flex; flex-wrap: wrap; gap: 8px; }
+.mate {
+  appearance: none; font: inherit; color: inherit; text-align: left;
+  background: var(--field); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 8px 12px; cursor: pointer;
+}
+.mate:hover { background: var(--paper); border-color: var(--rule2); }
+.mate-name { display: block; font-family: var(--mincho); font-size: 14.5px; font-weight: 600; }
+.mate-meta { display: block; font-size: 11.5px; color: var(--muted); }
+
+
 /* ===== 画面が狭いとき ===================================================== */
 
 @media (max-width: 700px) {
@@ -362,4 +470,5 @@ h3 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 0 0 12px; }
   .sidebar-foot { display: none; }
   .content { padding: 22px 18px 60px; }
   .batch-list { max-height: 300px; }
+  .pdetail-name { font-size: 23px; }
 }

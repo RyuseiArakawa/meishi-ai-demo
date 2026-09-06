@@ -1,17 +1,13 @@
 /* =============================================================================
-   画面の動き（Phase 1.5：複数枚・PDF対応）
+   画面の動き（Phase 2）
 
      ダッシュボード
-       ↓
-     名刺登録（画像を何枚でも／PDFも可）
-       ↓
-     1ページずつ順番にAIが読み取る
-       ↓
-     確認（複数あれば一覧から選んで1件ずつ直す）
-       ↓
-     まとめて登録
+     名刺登録  … 画像を何枚でも／PDFも可 → 順番にAIが読み取る → 確認 → 登録
+     人物一覧  … 検索・絞り込み            （js/people.js が担当）
+     人物詳細  … 編集・専門分野・交流の記録（js/people.js が担当）
 
-   Phase 2以降で「人物」「人脈」「AI検索」の画面を足していきます。
+   このファイルは、画面の切り替えと「名刺登録」を担当します。
+   人物まわりの表示は js/people.js に分けてあります。
    ============================================================================= */
 
 (function () {
@@ -23,6 +19,9 @@
     });
   }
   const $ = (id) => document.getElementById(id);
+
+  // people.js からも使えるように、共通の道具を外に出しておく
+  window.UI = { esc: esc, $: $, show: show };
 
   const FIELDS = [
     { key: "name",         label: "氏名" },
@@ -38,14 +37,7 @@
   ];
 
   /* --- 読み取り中・確認中の状態 ------------------------------------------ */
-  let batch = {
-    items: [],        // { thumb, label, ai, fields, edited, include }
-    selected: 0,
-    skipped: 0,       // 名刺が写っていなかったページ数
-    failed: [],       // 読み取りに失敗したページ
-    stop: false,      // 「中止する」が押されたか
-  };
-
+  let batch = { items: [], selected: 0, skipped: 0, failed: [], stop: false };
   function resetBatch() {
     batch = { items: [], selected: 0, skipped: 0, failed: [], stop: false };
   }
@@ -55,22 +47,31 @@
      画面の切り替え
      ========================================================================= */
 
-  function show(name) {
-    ["dashboard", "capture", "confirm", "done"].forEach(function (s) {
+  const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person"];
+
+  function show(name, id) {
+    SCREENS.forEach(function (s) {
       const el = $("screen-" + s);
       if (el) el.hidden = (s !== name);
     });
+
+    // サイドバーの現在地。人物詳細のときも「人物」を光らせる
+    const navKey = (name === "person") ? "people" : name;
     document.querySelectorAll(".nav-item").forEach(function (b) {
-      b.classList.toggle("is-active", b.dataset.screen === name);
+      b.classList.toggle("is-active", b.dataset.screen === navKey);
     });
+
     if (name === "dashboard") renderDashboard();
     if (name === "capture") resetCapture();
+    if (name === "people") People.renderList();
+    if (name === "person") People.renderDetail(id);
+
     window.scrollTo(0, 0);
   }
 
   document.addEventListener("click", function (e) {
     const el = e.target.closest("[data-screen]");
-    if (el && !el.disabled) show(el.dataset.screen);
+    if (el && !el.disabled) show(el.dataset.screen, el.dataset.id);
   });
 
 
@@ -82,6 +83,7 @@
     const s = Storage.getStats();
     $("stat-persons").textContent = s.persons;
     $("stat-orgs").textContent = s.organizations;
+    $("stat-topics").textContent = s.topics;
     $("stat-cards").textContent = s.cards;
     $("stat-size").innerHTML = (s.bytes / 1024 / 1024).toFixed(2) + "<i>MB</i>";
 
@@ -100,20 +102,21 @@
       warn.hidden = true;
     }
 
-    const persons = Storage.getPersons().slice(-8).reverse();
+    const persons = Storage.searchPersons("", "", "new").slice(0, 6);
     $("recent-list").innerHTML = persons.length
       ? persons.map(function (p) {
           const meta = [
             Storage.getOrganizationName(p.organization_id),
             p.department, p.job_title,
           ].filter(Boolean).join("　／　");
-          return '<div class="person-row">'
-            + '<div><span class="person-name">' + esc(p.name) + "</span>"
+          return '<button class="person-row" data-screen="person" data-id="' + p.id + '">'
+            + '<span class="person-name">' + esc(p.name) + "</span>"
             + (p.name_kana ? '<span class="person-kana">' + esc(p.name_kana) + "</span>" : "")
-            + "</div>"
-            + '<div class="person-meta">' + esc(meta || "所属情報なし") + "</div>"
-            + "</div>";
+            + '<span class="person-meta">' + esc(meta || "所属情報なし") + "</span>"
+            + "</button>";
         }).join("")
+        + '<div class="btn-row"><button class="btn btn-sm" data-screen="people">'
+        + "人物一覧をひらく</button></div>"
       : '<p class="empty">まだ登録がありません。「名刺登録」から始めてください。</p>';
   }
 
@@ -151,7 +154,6 @@
     }
   }
 
-  /** 選ばれたファイルを読み取る（ここが一括処理の入口） */
   async function handleFiles(fileList) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
@@ -167,7 +169,7 @@
     $("progress-detail").textContent = "";
     setProgress("画像を準備しています…");
 
-    // --- 1. ファイルをページの一覧に変換する（PDFはここで画像になる） ---
+    // --- 1. ファイルをページの一覧に変換（PDFはここで画像になる） ---
     let pages;
     try {
       pages = await AI.filesToPages(files, function (msg) { setProgress(msg); });
@@ -175,7 +177,6 @@
       captureError(err.message);
       return;
     }
-
     if (!pages.length) {
       captureError("読み取れる画像がありませんでした。画像またはPDFを選んでください。");
       return;
@@ -195,12 +196,10 @@
         } else {
           cards.forEach(function (c) {
             batch.items.push({
-              thumb: page.thumb,
-              label: page.label,
+              thumb: page.thumb, label: page.label,
               ai: c,                                  // AIが読んだ値。書き換えない
               fields: Object.assign({}, c),           // 編集用
-              edited: {},
-              include: true,
+              edited: {}, include: true,
             });
           });
         }
@@ -234,12 +233,11 @@
     const div = document.createElement("div");
     div.className = "thumb" + (count === 0 ? " is-blank" : (count < 0 ? " is-failed" : ""));
     div.innerHTML = '<img src="' + src + '" alt="">'
-      + '<span>' + (count < 0 ? "失敗" : (count === 0 ? "なし" : count + "枚")) + "</span>";
+      + "<span>" + (count < 0 ? "失敗" : (count === 0 ? "なし" : count + "枚")) + "</span>";
     $("thumb-strip").appendChild(div);
     $("thumb-strip").scrollLeft = $("thumb-strip").scrollWidth;
   }
 
-  // ファイル選択・カメラ・ドラッグ＆ドロップ
   $("file-input").addEventListener("change", (e) => handleFiles(e.target.files));
   $("camera-input").addEventListener("change", (e) => handleFiles(e.target.files));
   $("btn-pick").addEventListener("click", () => $("file-input").click());
@@ -279,7 +277,6 @@
       ? "左の一覧から1件ずつ選んで、内容を確認してください。チェックを外した名刺は登録されません。"
       : "AIが読み取った内容です。誤りを直してから登録してください。";
 
-    // 読み飛ばした・失敗したページの案内
     const notes = [];
     if (batch.skipped) notes.push("名刺が写っていなかったページ " + batch.skipped + "件は飛ばしました。");
     if (batch.failed.length) notes.push("読み取りに失敗したページが " + batch.failed.length + "件あります。");
@@ -352,8 +349,8 @@
     const note = $("ai-note");
     if (item.ai.notes) {
       note.hidden = false;
-      note.innerHTML = "<b>AIの注記：</b>" + esc(item.ai.notes) +
-        '<div class="ai-note-sub">名刺に書かれていた内容のうち、項目に収まらなかったものです。</div>';
+      note.innerHTML = "<b>AIの注記：</b>" + esc(item.ai.notes)
+        + '<div class="ai-note-sub">名刺に書かれていた内容のうち、項目に収まらなかったものです。</div>';
     } else {
       note.hidden = true;
     }
@@ -386,29 +383,24 @@
     }
   }
 
-  // 一覧のクリック（選択の切り替えと、チェックの入り切り）
   $("batch-items").addEventListener("click", function (e) {
     const check = e.target.closest("[data-check]");
     if (check) {
-      const i = Number(check.dataset.check);
-      batch.items[i].include = check.checked;
-      renderBatchList();
-      renderLedger();
+      batch.items[Number(check.dataset.check)].include = check.checked;
+      renderBatchList(); renderLedger();
       return;
     }
     const row = e.target.closest("[data-index]");
     if (row) {
       batch.selected = Number(row.dataset.index);
-      renderBatchList();
-      renderLedger();
+      renderBatchList(); renderLedger();
     }
   });
 
   $("btn-toggle-all").addEventListener("click", function () {
     const allOn = batch.items.every((it) => it.include);
     batch.items.forEach((it) => { it.include = !allOn; });
-    renderBatchList();
-    renderLedger();
+    renderBatchList(); renderLedger();
   });
 
   $("btn-retry").addEventListener("click", () => show("capture"));
@@ -417,7 +409,6 @@
     const targets = batch.items.filter((it) => it.include);
     if (!targets.length) return;
 
-    // 氏名が空のものがあれば、そこへ案内する
     const emptyIndex = batch.items.findIndex(
       (it) => it.include && !String(it.fields.name || "").trim()
     );
@@ -432,15 +423,12 @@
       return;
     }
 
-    let saved = 0;
-    let firstPerson = null;
-    let failMessage = "";
-
+    let saved = 0, firstId = "", firstPerson = null, failMessage = "";
     for (const it of targets) {
       const r = Storage.savePerson(it.fields, it.thumb);
       if (r.ok) {
         saved++;
-        if (!firstPerson) firstPerson = Storage.getPerson(r.personId);
+        if (!firstId) { firstId = r.personId; firstPerson = Storage.getPerson(r.personId); }
       } else {
         failMessage = r.error || "保存できませんでした。";
         break;
@@ -454,18 +442,17 @@
       return;
     }
 
-    if (saved === 1 && firstPerson) {
-      $("done-name").textContent = firstPerson.name + " さんを登録しました";
-      $("done-meta").textContent =
-        [Storage.getOrganizationName(firstPerson.organization_id),
-         firstPerson.department, firstPerson.job_title]
-          .filter(Boolean).join("　／　") || "所属情報なし";
-    } else {
-      $("done-name").textContent = saved + " 件を登録しました";
-      $("done-meta").textContent = failMessage
-        ? "途中で保存できなくなりました：" + failMessage
-        : "ダッシュボードで一覧を確認できます。";
+    // 1件だけなら、その人物の画面へ直接進める
+    if (saved === 1 && firstId) {
+      resetBatch();
+      show("person", firstId);
+      return;
     }
+
+    $("done-name").textContent = saved + " 件を登録しました";
+    $("done-meta").textContent = failMessage
+      ? "途中で保存できなくなりました：" + failMessage
+      : "人物一覧から、専門分野や交流の記録を追加できます。";
     resetBatch();
     show("done");
   });

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
 
@@ -24,14 +24,14 @@
   <ul class="nav">
     <li><button class="nav-item" data-screen="dashboard">ダッシュボード</button></li>
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
-    <li><button class="nav-item is-locked" disabled>人物<span class="phase">Phase 2</span></button></li>
+    <li><button class="nav-item" data-screen="people">人物</button></li>
     <li><button class="nav-item is-locked" disabled>人脈<span class="phase">Phase 4</span></button></li>
     <li><button class="nav-item is-locked" disabled>AI検索<span class="phase">Phase 5</span></button></li>
   </ul>
 
   <div class="sidebar-foot">
     <div id="conn" class="conn conn-unknown">接続を確認中…</div>
-    <p>デモ版 Phase 1<br>架空の名刺で操作してください</p>
+    <p>デモ版 Phase 2<br>架空の名刺で操作してください</p>
   </div>
 </nav>
 
@@ -48,6 +48,7 @@
     <div class="stat-strip">
       <div class="stat"><b id="stat-persons">0</b><span>人物</span></div>
       <div class="stat"><b id="stat-orgs">0</b><span>組織</span></div>
+      <div class="stat"><b id="stat-topics">0</b><span>専門分野</span></div>
       <div class="stat"><b id="stat-cards">0</b><span>名刺</span></div>
       <div class="stat"><b id="stat-size">0.00<i>MB</i></b><span>使用容量／約5MB</span></div>
     </div>
@@ -60,10 +61,11 @@
         <p>名刺の画像やPDFから、AIが記載事項を項目に分けます。まとめて読み取れます。</p>
         <span class="menu-go">はじめる</span>
       </button>
-      <div class="menu-card is-locked">
-        <h2>人物<span class="phase">Phase 2</span></h2>
-        <p>登録した人物の一覧・詳細・検索。専門分野の記録もここで行います。</p>
-      </div>
+      <button class="menu-card" data-screen="people">
+        <h2>人物</h2>
+        <p>登録した人物を探し、専門分野や交流の記録を書き足します。</p>
+        <span class="menu-go">ひらく</span>
+      </button>
       <div class="menu-card is-locked">
         <h2>人脈<span class="phase">Phase 4</span></h2>
         <p>人物をノード、関係をエッジとして、つながりを図で表示します。</p>
@@ -75,7 +77,7 @@
     </div>
 
     <section class="block">
-      <h3>登録済みの人物</h3>
+      <h3>最近登録した人物</h3>
       <div id="recent-list"></div>
     </section>
 
@@ -117,9 +119,7 @@
       <div class="dz-sub">複数まとめて選べます。ここにドラッグしても読み込めます</div>
     </div>
 
-    <!-- 画像は複数選択可、PDFも受け付ける -->
     <input type="file" id="file-input" accept="image/*,application/pdf" multiple hidden>
-    <!-- スマートフォンのカメラ用（1枚ずつ） -->
     <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
 
     <div class="btn-row" id="capture-buttons">
@@ -127,7 +127,6 @@
       <button class="btn" id="btn-camera">カメラで撮る</button>
     </div>
 
-    <!-- 読み取り中 -->
     <div id="reading" class="reading" hidden>
       <div class="progress-head">
         <span class="spinner" aria-hidden="true"></span>
@@ -160,8 +159,6 @@
     <div id="confirm-error" class="alert alert-error" hidden></div>
 
     <div class="confirm-layout" id="confirm-layout">
-
-      <!-- 複数枚のときだけ出る一覧 -->
       <aside class="batch-list" id="batch-list" hidden>
         <div class="batch-head">
           <span id="batch-count">0件</span>
@@ -187,29 +184,47 @@
           <button class="btn" id="btn-retry">やり直す</button>
         </div>
       </div>
-
     </div>
   </section>
 
-  <!-- ---------- 登録完了 ---------- -->
+  <!-- ---------- 登録完了（複数件のとき） ---------- -->
   <section id="screen-done" class="screen" hidden>
     <div class="done">
       <div class="seal">登録</div>
       <h1 id="done-name">登録しました</h1>
       <p id="done-meta" class="note"></p>
       <div class="btn-row">
-        <button class="btn btn-primary" data-screen="capture">続けて名刺を登録する</button>
-        <button class="btn" data-screen="dashboard">ダッシュボードへ</button>
+        <button class="btn btn-primary" data-screen="people">人物一覧をひらく</button>
+        <button class="btn" data-screen="capture">続けて名刺を登録する</button>
       </div>
     </div>
   </section>
 
+  <!-- ---------- 人物一覧（Phase 2） ---------- -->
+  <section id="screen-people" class="screen" hidden>
+    <header class="page-head">
+      <h1>人物</h1>
+      <p>氏名・組織・専門分野のいずれからでも探せます。</p>
+    </header>
+
+    <div class="controls" id="people-controls"></div>
+    <p class="count" id="people-count"></p>
+    <div id="people-list"></div>
+  </section>
+
+  <!-- ---------- 人物詳細（Phase 2） ---------- -->
+  <section id="screen-person" class="screen" hidden>
+    <p class="backline"><button class="linkbtn" data-screen="people">← 人物一覧へもどる</button></p>
+    <div id="person-body"></div>
+  </section>
+
 </main>
 
-<script src="js/config.js"></script>
-<script src="js/storage.js"></script>
-<script src="js/gemini.js"></script>
-<script src="js/pdf.js"></script>
-<script src="js/app.js"></script>
+<script src="js/config.js?v=2"></script>
+<script src="js/storage.js?v=2"></script>
+<script src="js/gemini.js?v=2"></script>
+<script src="js/pdf.js?v=2"></script>
+<script src="js/app.js?v=2"></script>
+<script src="js/people.js?v=2"></script>
 </body>
 </html>

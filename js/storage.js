@@ -6,8 +6,8 @@
    保存の処理をここに集めてあります。
 
    テーブルの構成は設計書 §8 と同じです。
-   Phase 1 では organizations / persons / business_cards の3つだけ使いますが、
-   残りも空の状態で作っておきます（Phase 3以降で使います）。
+   Phase 2 では topics / person_topics / interactions も使い始めます。
+   relationships（人物同士の関係）は Phase 3 で使います。
    ============================================================================= */
 
 const Storage = (function () {
@@ -22,9 +22,9 @@ const Storage = (function () {
       persons:        [],   // 人物
       business_cards: [],   // 名刺
       relationships:  [],   // 人物同士の関係       … Phase 3
-      interactions:   [],   // 交流の記録           … Phase 3
-      topics:         [],   // 専門分野             … Phase 2
-      person_topics:  [],   // 人物と専門の結びつき … Phase 2
+      interactions:   [],   // 交流の記録
+      topics:         [],   // 専門分野
+      person_topics:  [],   // 人物と専門の結びつき
     };
   }
 
@@ -81,15 +81,21 @@ const Storage = (function () {
     return s === "" ? null : s;
   }
 
+  // 全角を半角にそろえ、記号と空白を落とす（検索・照合用）
+  function fold(s) {
+    return String(s || "")
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+      .replace(/[\s\u3000]/g, "")
+      .toLowerCase();
+  }
+
   // 組織名のゆれを吸収する。
   // 「株式会社ABC」「(株)ABC」「ＡＢＣ」を同じ組織として扱うための下ごしらえ。
   function normalizeOrgName(s) {
-    return String(s || "")
-      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    return fold(s)
       .replace(/(株式会社|有限会社|合同会社|一般社団法人|公益財団法人|国立大学法人|独立行政法人)/g, "")
       .replace(/[（(]株[）)]|㈱|[（(]有[）)]|㈲/g, "")
-      .replace(/[\s\u3000・,.，．]/g, "")
-      .toLowerCase();
+      .replace(/[・,.，．]/g, "");
   }
 
   /* --- 組織 --------------------------------------------------------------- */
@@ -104,13 +110,8 @@ const Storage = (function () {
     if (found) return found.id;
 
     const org = {
-      id: uuid(),
-      name: n,
-      industry: null,
-      address: null,
-      website: null,
-      created_at: nowISO(),
-      updated_at: nowISO(),
+      id: uuid(), name: n, industry: null, address: null, website: null,
+      created_at: nowISO(), updated_at: nowISO(),
     };
     db.organizations.push(org);
     return org.id;
@@ -121,13 +122,32 @@ const Storage = (function () {
     return o ? o.name : "";
   }
 
-  /* --- 人物と名刺の登録 --------------------------------------------------- */
+  // 所属人数つきの組織一覧（人数の多い順）
+  function getOrganizations() {
+    return db.organizations
+      .map((o) => ({
+        ...o,
+        count: db.persons.filter((p) => p.organization_id === o.id).length,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ja"));
+  }
+
+  // どの人物からも参照されなくなった組織を片づける
+  function pruneOrganizations() {
+    db.organizations = db.organizations.filter((o) =>
+      db.persons.some((p) => p.organization_id === o.id)
+    );
+  }
+
+  /* --- 人物の登録・更新・削除 --------------------------------------------- */
+
+  const PERSON_FIELDS = [
+    "name", "name_kana", "department", "job_title",
+    "email", "phone", "fax", "address", "website", "notes",
+  ];
 
   /**
-   * 確認画面の内容を、persons / organizations / business_cards の3つに分けて保存する。
-   * @param {object} fields  確認画面で確定した項目
-   * @param {string} imageDataUrl  名刺画像
-   * @returns {{ok:boolean, personId:string, error:string}}
+   * 確認画面の内容を、persons / organizations / business_cards に分けて保存する。
    */
   function savePerson(fields, imageDataUrl) {
     const name = clean(fields.name);
@@ -135,20 +155,12 @@ const Storage = (function () {
 
     const person = {
       id: uuid(),
-      name: name,
-      name_kana: clean(fields.name_kana),
       organization_id: findOrCreateOrganization(fields.organization),
-      department: clean(fields.department),
-      job_title: clean(fields.job_title),
-      email: clean(fields.email),
-      phone: clean(fields.phone),
-      fax: clean(fields.fax),
-      address: clean(fields.address),
-      website: clean(fields.website),
-      notes: clean(fields.notes),
       created_at: nowISO(),
       updated_at: nowISO(),
     };
+    PERSON_FIELDS.forEach((k) => { person[k] = clean(fields[k]); });
+    person.name = name;
     db.persons.push(person);
 
     db.business_cards.push({
@@ -164,37 +176,203 @@ const Storage = (function () {
     return { ok: ok, personId: person.id, error: lastError };
   }
 
-  // 同じ氏名の人がすでに登録されていないか調べる（登録前の注意表示に使う）
-  function findByName(name) {
-    const key = String(name || "").replace(/[\s\u3000]/g, "");
-    if (!key) return [];
-    return db.persons.filter(
-      (p) => String(p.name).replace(/[\s\u3000]/g, "") === key
-    );
+  /** 人物詳細画面での編集を反映する */
+  function updatePerson(id, fields) {
+    const p = db.persons.find((x) => x.id === id);
+    if (!p) return { ok: false, error: "この人物は見つかりません。" };
+
+    const name = clean(fields.name);
+    if (!name) return { ok: false, error: "氏名を空にはできません。" };
+
+    PERSON_FIELDS.forEach((k) => {
+      if (k in fields) p[k] = clean(fields[k]);
+    });
+    p.name = name;
+
+    if ("organization" in fields) {
+      p.organization_id = findOrCreateOrganization(fields.organization);
+      pruneOrganizations();
+    }
+    p.updated_at = nowISO();
+
+    return { ok: persist(), error: lastError };
   }
 
-  /* --- 取り出し ----------------------------------------------------------- */
+  /** 人物と、その人に紐づく名刺・専門・交流・関係をまとめて消す */
+  function deletePerson(id) {
+    db.persons = db.persons.filter((x) => x.id !== id);
+    db.business_cards = db.business_cards.filter((x) => x.person_id !== id);
+    db.person_topics = db.person_topics.filter((x) => x.person_id !== id);
+    db.interactions = db.interactions.filter((x) => x.person_id !== id);
+    db.relationships = db.relationships.filter(
+      (x) => x.from_person_id !== id && x.to_person_id !== id
+    );
+    pruneOrganizations();
+    pruneTopics();
+    return persist();
+  }
 
-  const getAll = () => db;
+  /* --- 人物の取り出しと検索 ----------------------------------------------- */
+
   const getPersons = () => db.persons;
   const getPerson = (id) => db.persons.find((p) => p.id === id) || null;
   const getCardOf = (personId) =>
     db.business_cards.find((c) => c.person_id === personId) || null;
+
+  // 同じ氏名の人がすでにいないか（登録前の注意表示に使う）
+  function findByName(name) {
+    const key = fold(name);
+    if (!key) return [];
+    return db.persons.filter((p) => fold(p.name) === key);
+  }
+
+  // 同じ組織に登録されている、ほかの人物
+  function getColleagues(personId) {
+    const p = getPerson(personId);
+    if (!p || !p.organization_id) return [];
+    return db.persons.filter(
+      (x) => x.id !== personId && x.organization_id === p.organization_id
+    );
+  }
+
+  /**
+   * 人物を検索する。
+   * 氏名・ふりがな・組織・部署・役職・メール・専門分野を横断して探す。
+   * @param query    検索語（空なら全件）
+   * @param orgId    組織で絞り込む場合はそのID
+   * @param sort     "name" | "new" | "org"
+   */
+  function searchPersons(query, orgId, sort) {
+    const q = fold(query);
+    let list = db.persons.slice();
+
+    if (orgId) list = list.filter((p) => p.organization_id === orgId);
+
+    if (q) {
+      list = list.filter(function (p) {
+        const bag = [
+          p.name, p.name_kana, getOrganizationName(p.organization_id),
+          p.department, p.job_title, p.email, p.phone, p.address, p.notes,
+        ].concat(getTopicsOf(p.id).map((t) => t.name)).join(" ");
+        return fold(bag).includes(q);
+      });
+    }
+
+    if (sort === "new") {
+      list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    } else if (sort === "org") {
+      list.sort((a, b) =>
+        getOrganizationName(a.organization_id).localeCompare(
+          getOrganizationName(b.organization_id), "ja") ||
+        String(a.name_kana || a.name).localeCompare(String(b.name_kana || b.name), "ja")
+      );
+    } else {
+      list.sort((a, b) =>
+        String(a.name_kana || a.name).localeCompare(String(b.name_kana || b.name), "ja"));
+    }
+    return list;
+  }
+
+  /* --- 専門分野（topics / person_topics） --------------------------------- */
+
+  function getTopicsOf(personId) {
+    return db.person_topics
+      .filter((pt) => pt.person_id === personId)
+      .map(function (pt) {
+        const t = db.topics.find((x) => x.id === pt.topic_id);
+        return { topic_id: pt.topic_id, name: t ? t.name : "?", source: pt.source };
+      });
+  }
+
+  /** 専門分野を1つ足す。source は「どこで知ったか」の記録（設計書§20 SOURCE） */
+  function addTopicTo(personId, name, source) {
+    const n = clean(name);
+    if (!n) return { ok: false, error: "専門分野が空です。" };
+
+    let t = db.topics.find((x) => fold(x.name) === fold(n));
+    if (!t) {
+      t = { id: uuid(), name: n, description: null };
+      db.topics.push(t);
+    }
+    const exists = db.person_topics.some(
+      (pt) => pt.person_id === personId && pt.topic_id === t.id
+    );
+    if (exists) return { ok: true, error: "" };
+
+    db.person_topics.push({
+      person_id: personId,
+      topic_id: t.id,
+      confidence: 1,                       // 人が入力した情報なので 1
+      source: clean(source) || "手入力",
+    });
+    return { ok: persist(), error: lastError };
+  }
+
+  function removeTopicFrom(personId, topicId) {
+    db.person_topics = db.person_topics.filter(
+      (pt) => !(pt.person_id === personId && pt.topic_id === topicId)
+    );
+    pruneTopics();
+    return persist();
+  }
+
+  // どの人物にも結びついていない専門分野を片づける
+  function pruneTopics() {
+    db.topics = db.topics.filter((t) =>
+      db.person_topics.some((pt) => pt.topic_id === t.id)
+    );
+  }
+
+  // 入力候補に使う、登録済みの専門分野一覧
+  const getAllTopics = () =>
+    db.topics.slice().sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+  /* --- 交流の記録（interactions） ----------------------------------------- */
+
+  function getInteractionsOf(personId) {
+    return db.interactions
+      .filter((i) => i.person_id === personId)
+      .sort((a, b) => String(b.occurred_at || "").localeCompare(String(a.occurred_at || "")));
+  }
+
+  function addInteraction(personId, data) {
+    const hasSomething = clean(data.event_name) || clean(data.summary) ||
+                         clean(data.location) || clean(data.occurred_at);
+    if (!hasSomething) return { ok: false, error: "記録する内容がありません。" };
+
+    db.interactions.push({
+      id: uuid(),
+      person_id: personId,
+      occurred_at: clean(data.occurred_at) ? data.occurred_at + "T00:00:00Z" : null,
+      location: clean(data.location),
+      event_name: clean(data.event_name),
+      summary: clean(data.summary),
+      created_at: nowISO(),
+    });
+    return { ok: persist(), error: lastError };
+  }
+
+  function removeInteraction(id) {
+    db.interactions = db.interactions.filter((i) => i.id !== id);
+    return persist();
+  }
+
+  /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
     return {
       persons: db.persons.length,
       organizations: db.organizations.length,
       cards: db.business_cards.length,
+      topics: db.topics.length,
+      interactions: db.interactions.length,
       bytes: new Blob([JSON.stringify(db)]).size,
     };
   }
 
   /* --- 書き出し・読み込み・削除 ------------------------------------------- */
 
-  function exportJSON() {
-    return JSON.stringify(db, null, 2);
-  }
+  const exportJSON = () => JSON.stringify(db, null, 2);
 
   function importJSON(text) {
     try {
@@ -219,9 +397,23 @@ const Storage = (function () {
 
   return {
     isPersistent: canUseStorage,
-    getAll, getPersons, getPerson, getCardOf, getStats,
-    getOrganizationName, findByName,
-    savePerson,
-    exportJSON, importJSON, clearAll,
+    getAll: () => db,
+
+    // 人物
+    getPersons, getPerson, getCardOf, searchPersons,
+    savePerson, updatePerson, deletePerson,
+    findByName, getColleagues,
+
+    // 組織
+    getOrganizationName, getOrganizations,
+
+    // 専門分野
+    getTopicsOf, addTopicTo, removeTopicFrom, getAllTopics,
+
+    // 交流
+    getInteractionsOf, addInteraction, removeInteraction,
+
+    // その他
+    getStats, exportJSON, importJSON, clearAll,
   };
 })();
