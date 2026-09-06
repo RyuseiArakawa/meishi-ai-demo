@@ -20,7 +20,7 @@
 
 window.APP_CONFIG = {
 
-  API_ENDPOINT: "",
+  API_ENDPOINT: "https://meishi-ocr.muetai250115.workers.dev",
 
   /* 1分あたりに送ってよい回数。
      Gemini の無料枠は、モデルにもよりますが 1分あたり 10〜15 回です。
