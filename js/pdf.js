@@ -52,9 +52,14 @@ const PdfPages = (function () {
 
     const buffer = await file.arrayBuffer();
 
-    let doc;
+    // getDocument が返すのは「読み込み処理」。
+    // その .promise を待つと「PDF本体」が得られる。
+    // 後片付けの destroy() は読み込み処理のほうに付いているので、
+    // 両方を変数に持っておく必要がある。
+    let task, doc;
     try {
-      doc = await lib.getDocument({ data: buffer }).promise;
+      task = lib.getDocument({ data: buffer });
+      doc = await task.promise;
     } catch (err) {
       if (err && /password/i.test(String(err.message))) {
         throw new Error("このPDFにはパスワードがかかっています：" + file.name);
@@ -98,11 +103,20 @@ const PdfPages = (function () {
       page.cleanup();
     }
 
-    doc.destroy();
+    const totalPages = doc.numPages;
 
-    if (doc.numPages > MAX_PAGES && onProgress) {
+    // 後片付け。ここで失敗しても変換結果には影響しないので、
+    // 画面を止めないように囲っておく。
+    try {
+      await doc.cleanup();
+      await task.destroy();
+    } catch (e) {
+      console.warn("PDFの後片付けに失敗しました", e);
+    }
+
+    if (totalPages > MAX_PAGES && onProgress) {
       onProgress(
-        "このPDFは" + doc.numPages + "ページありますが、" +
+        "このPDFは" + totalPages + "ページありますが、" +
         "一度に処理できる上限のため最初の" + MAX_PAGES + "ページだけを読み取ります。"
       );
     }
