@@ -1,7 +1,15 @@
 /* =============================================================================
-   画面の動き（Phase 1）
+   画面の動き（Phase 1.5：複数枚・PDF対応）
 
-     ダッシュボード → 名刺登録 → 読み取り → 確認 → 登録完了
+     ダッシュボード
+       ↓
+     名刺登録（画像を何枚でも／PDFも可）
+       ↓
+     1ページずつ順番にAIが読み取る
+       ↓
+     確認（複数あれば一覧から選んで1件ずつ直す）
+       ↓
+     まとめて登録
 
    Phase 2以降で「人物」「人脈」「AI検索」の画面を足していきます。
    ============================================================================= */
@@ -9,16 +17,13 @@
 (function () {
   "use strict";
 
-  /* --- 画面に出す文字をそのまま使うと危ないので、記号を無害化する --------- */
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-
   const $ = (id) => document.getElementById(id);
 
-  /* --- 確認画面に並べる項目（順番もこのとおり） -------------------------- */
   const FIELDS = [
     { key: "name",         label: "氏名" },
     { key: "name_kana",    label: "ふりがな" },
@@ -32,13 +37,18 @@
     { key: "website",      label: "Webサイト" },
   ];
 
-  /* --- いま扱っている名刺の状態 ------------------------------------------ */
-  let current = {
-    imageDataUrl: "",   // 縮小した名刺画像
-    aiFields: null,     // AIが読み取った値（元のまま。変更しない）
-    fields: null,       // 画面で編集中の値
-    edited: {},         // 人が直した項目を覚えておく
+  /* --- 読み取り中・確認中の状態 ------------------------------------------ */
+  let batch = {
+    items: [],        // { thumb, label, ai, fields, edited, include }
+    selected: 0,
+    skipped: 0,       // 名刺が写っていなかったページ数
+    failed: [],       // 読み取りに失敗したページ
+    stop: false,      // 「中止する」が押されたか
   };
+
+  function resetBatch() {
+    batch = { items: [], selected: 0, skipped: 0, failed: [], stop: false };
+  }
 
 
   /* =========================================================================
@@ -50,11 +60,9 @@
       const el = $("screen-" + s);
       if (el) el.hidden = (s !== name);
     });
-
     document.querySelectorAll(".nav-item").forEach(function (b) {
       b.classList.toggle("is-active", b.dataset.screen === name);
     });
-
     if (name === "dashboard") renderDashboard();
     if (name === "capture") resetCapture();
     window.scrollTo(0, 0);
@@ -92,14 +100,12 @@
       warn.hidden = true;
     }
 
-    // 登録済みの人物（新しい順に5件）
-    const persons = Storage.getPersons().slice(-5).reverse();
+    const persons = Storage.getPersons().slice(-8).reverse();
     $("recent-list").innerHTML = persons.length
       ? persons.map(function (p) {
           const meta = [
             Storage.getOrganizationName(p.organization_id),
-            p.department,
-            p.job_title,
+            p.department, p.job_title,
           ].filter(Boolean).join("　／　");
           return '<div class="person-row">'
             + '<div><span class="person-name">' + esc(p.name) + "</span>"
@@ -117,11 +123,15 @@
      ========================================================================= */
 
   function resetCapture() {
-    current = { imageDataUrl: "", aiFields: null, fields: null, edited: {} };
+    resetBatch();
     $("capture-error").hidden = true;
     $("dropzone").hidden = false;
+    $("capture-buttons").hidden = false;
+    $("capture-note").hidden = false;
     $("reading").hidden = true;
+    $("thumb-strip").innerHTML = "";
     $("file-input").value = "";
+    $("camera-input").value = "";
   }
 
   function captureError(message) {
@@ -129,78 +139,186 @@
     box.textContent = message;
     box.hidden = false;
     $("dropzone").hidden = false;
+    $("capture-buttons").hidden = false;
+    $("capture-note").hidden = false;
     $("reading").hidden = true;
   }
 
-  async function handleFile(file) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      captureError("画像ファイルを選んでください。");
-      return;
-    }
-
-    $("capture-error").hidden = true;
-
-    // 1. 画像を縮小する
-    try {
-      current.imageDataUrl = await AI.shrinkImage(file);
-    } catch (err) {
-      captureError(err.message);
-      return;
-    }
-
-    // 2. 読み取り中の表示に切り替える
-    $("dropzone").hidden = true;
-    $("reading").hidden = false;
-    $("reading-preview").src = current.imageDataUrl;
-
-    // 3. Workers経由でAIに読ませる
-    try {
-      const data = await AI.readBusinessCard(current.imageDataUrl);
-      current.aiFields = data;
-      current.fields = Object.assign({}, data);
-      current.edited = {};
-      renderConfirm();
-      show("confirm");
-    } catch (err) {
-      captureError(err.message);
+  function setProgress(text, done, total) {
+    $("progress-text").textContent = text;
+    if (typeof done === "number" && total > 0) {
+      $("progress-bar").style.width = Math.round((done / total) * 100) + "%";
     }
   }
 
-  // ファイル選択
-  $("file-input").addEventListener("change", function (e) {
-    handleFile(e.target.files[0]);
+  /** 選ばれたファイルを読み取る（ここが一括処理の入口） */
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+
+    resetBatch();
+    $("capture-error").hidden = true;
+    $("dropzone").hidden = true;
+    $("capture-buttons").hidden = true;
+    $("capture-note").hidden = true;
+    $("reading").hidden = false;
+    $("thumb-strip").innerHTML = "";
+    $("progress-bar").style.width = "0%";
+    $("progress-detail").textContent = "";
+    setProgress("画像を準備しています…");
+
+    // --- 1. ファイルをページの一覧に変換する（PDFはここで画像になる） ---
+    let pages;
+    try {
+      pages = await AI.filesToPages(files, function (msg) { setProgress(msg); });
+    } catch (err) {
+      captureError(err.message);
+      return;
+    }
+
+    if (!pages.length) {
+      captureError("読み取れる画像がありませんでした。画像またはPDFを選んでください。");
+      return;
+    }
+
+    // --- 2. 1ページずつ読み取る ---
+    let done = 0;
+    setProgress("読み取っています（0 / " + pages.length + "）", 0, pages.length);
+
+    await AI.readPages(
+      pages,
+      function (i, cards, page) {                    // 成功
+        done++;
+        if (batch.stop) return;
+        if (!cards.length) {
+          batch.skipped++;
+        } else {
+          cards.forEach(function (c) {
+            batch.items.push({
+              thumb: page.thumb,
+              label: page.label,
+              ai: c,                                  // AIが読んだ値。書き換えない
+              fields: Object.assign({}, c),           // 編集用
+              edited: {},
+              include: true,
+            });
+          });
+        }
+        addThumb(page.thumb, cards.length);
+        setProgress("読み取っています（" + done + " / " + pages.length + "）", done, pages.length);
+      },
+      function (i, message, page) {                   // 失敗
+        done++;
+        batch.failed.push({ label: page.label, message: message });
+        addThumb(page.thumb, -1);
+        setProgress("読み取っています（" + done + " / " + pages.length + "）", done, pages.length);
+        $("progress-detail").textContent = "一部のページで失敗しました：" + message;
+      }
+    );
+
+    // --- 3. 結果へ ---
+    if (!batch.items.length) {
+      let msg = "名刺を読み取れませんでした。";
+      if (batch.failed.length) msg += "　" + batch.failed[0].message;
+      else if (batch.skipped) msg += "　" + batch.skipped + "ページを調べましたが、名刺が見つかりませんでした。";
+      captureError(msg);
+      return;
+    }
+
+    batch.selected = 0;
+    renderConfirm();
+    show("confirm");
+  }
+
+  function addThumb(src, count) {
+    const div = document.createElement("div");
+    div.className = "thumb" + (count === 0 ? " is-blank" : (count < 0 ? " is-failed" : ""));
+    div.innerHTML = '<img src="' + src + '" alt="">'
+      + '<span>' + (count < 0 ? "失敗" : (count === 0 ? "なし" : count + "枚")) + "</span>";
+    $("thumb-strip").appendChild(div);
+    $("thumb-strip").scrollLeft = $("thumb-strip").scrollWidth;
+  }
+
+  // ファイル選択・カメラ・ドラッグ＆ドロップ
+  $("file-input").addEventListener("change", (e) => handleFiles(e.target.files));
+  $("camera-input").addEventListener("change", (e) => handleFiles(e.target.files));
+  $("btn-pick").addEventListener("click", () => $("file-input").click());
+  $("btn-camera").addEventListener("click", () => $("camera-input").click());
+  $("btn-stop").addEventListener("click", function () {
+    batch.stop = true;
+    setProgress("中止しています…");
   });
 
-  // クリック／キーボード／ドラッグ＆ドロップ
   const dz = $("dropzone");
   dz.addEventListener("click", () => $("file-input").click());
   dz.addEventListener("keydown", function (e) {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file-input").click(); }
   });
   dz.addEventListener("dragover", function (e) { e.preventDefault(); dz.classList.add("is-drag"); });
-  dz.addEventListener("dragleave", function () { dz.classList.remove("is-drag"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("is-drag"));
   dz.addEventListener("drop", function (e) {
     e.preventDefault();
     dz.classList.remove("is-drag");
-    handleFile(e.dataTransfer.files[0]);
+    handleFiles(e.dataTransfer.files);
   });
 
 
   /* =========================================================================
-     読み取り結果の確認
+     確認画面
 
-     ここで「AIが読んだ値」と「人が直した値」を見分けられるようにしています。
+     「AIが読んだ値」と「人が直した値」を見分けられるようにしています。
      設計書§6-8「事実とAIによる推論を分離する」を、画面の上でも守るためです。
      ========================================================================= */
 
   function renderConfirm() {
-    $("confirm-preview").src = current.imageDataUrl;
+    const multi = batch.items.length > 1;
+    $("confirm-layout").classList.toggle("is-batch", multi);
+    $("batch-list").hidden = !multi;
+
+    $("confirm-lede").textContent = multi
+      ? "左の一覧から1件ずつ選んで、内容を確認してください。チェックを外した名刺は登録されません。"
+      : "AIが読み取った内容です。誤りを直してから登録してください。";
+
+    // 読み飛ばした・失敗したページの案内
+    const notes = [];
+    if (batch.skipped) notes.push("名刺が写っていなかったページ " + batch.skipped + "件は飛ばしました。");
+    if (batch.failed.length) notes.push("読み取りに失敗したページが " + batch.failed.length + "件あります。");
+    const skip = $("skip-notice");
+    skip.hidden = notes.length === 0;
+    skip.textContent = notes.join("　");
+
+    if (multi) renderBatchList();
+    renderLedger();
+  }
+
+  function renderBatchList() {
+    const chosen = batch.items.filter((it) => it.include).length;
+    $("batch-count").textContent = batch.items.length + "件中 " + chosen + "件を登録";
+    $("btn-toggle-all").textContent = chosen === batch.items.length ? "すべて外す" : "すべて選ぶ";
+
+    $("batch-items").innerHTML = batch.items.map(function (it, i) {
+      const org = it.fields.organization || "";
+      return '<div class="bitem' + (i === batch.selected ? " is-current" : "") + '" data-index="' + i + '">'
+        + '<input type="checkbox" class="bcheck" data-check="' + i + '"'
+        + (it.include ? " checked" : "") + ' aria-label="登録する">'
+        + '<img src="' + it.thumb + '" alt="">'
+        + '<div class="binfo">'
+        +   '<div class="bname">' + esc(it.fields.name || "（氏名なし）") + "</div>"
+        +   '<div class="borg">' + esc(org || it.label) + "</div>"
+        + "</div></div>";
+    }).join("");
+  }
+
+  function renderLedger() {
+    const item = batch.items[batch.selected];
+    if (!item) return;
+
+    $("confirm-preview").src = item.thumb;
     $("confirm-error").hidden = true;
 
     $("ledger").innerHTML = FIELDS.map(function (f) {
-      const value = current.fields[f.key] || "";
-      const state = current.edited[f.key] ? "human" : (value ? "ai" : "none");
+      const value = item.fields[f.key] || "";
+      const state = item.edited[f.key] ? "human" : (value ? "ai" : "none");
       const mark = state === "human" ? "修正" : (state === "ai" ? "AI" : "―");
       return '<div class="lrow">'
         + '<label for="fld-' + f.key + '">' + f.label + "</label>"
@@ -211,35 +329,50 @@
         + "</div>";
     }).join("");
 
-    // 入力されたら、その項目を「修正」に変える
     $("ledger").querySelectorAll("input[data-key]").forEach(function (input) {
       input.addEventListener("input", function () {
         const key = input.dataset.key;
-        current.fields[key] = input.value;
-
-        const original = current.aiFields[key] || "";
+        item.fields[key] = input.value;
+        const original = item.ai[key] || "";
         const changed = input.value.trim() !== original;
-        current.edited[key] = changed;
+        item.edited[key] = changed;
 
         const badge = $("src-" + key);
         const state = changed ? "human" : (input.value.trim() ? "ai" : "none");
         badge.dataset.src = state;
         badge.textContent = state === "human" ? "修正" : (state === "ai" ? "AI" : "―");
+
+        if (key === "name" || key === "organization") {
+          if (batch.items.length > 1) renderBatchList();
+          checkDuplicate();
+        }
       });
     });
 
-    // AIが読み取りに迷った箇所（notes）は、本文とは別枠で表示する
     const note = $("ai-note");
-    if (current.aiFields.notes) {
+    if (item.ai.notes) {
       note.hidden = false;
-      note.innerHTML = "<b>AIの注記：</b>" + esc(current.aiFields.notes);
+      note.innerHTML = "<b>AIの注記：</b>" + esc(item.ai.notes) +
+        '<div class="ai-note-sub">名刺に書かれていた内容のうち、項目に収まらなかったものです。</div>';
     } else {
       note.hidden = true;
     }
 
-    // 同じ氏名の人がいれば知らせる（勝手に統合はしない）
-    const dup = Storage.findByName(current.fields.name);
+    const chosen = batch.items.filter((it) => it.include).length;
+    $("btn-register").textContent = batch.items.length > 1
+      ? "選んだ " + chosen + " 件を登録する"
+      : "この内容で登録する";
+    $("btn-register").disabled = chosen === 0;
+
+    checkDuplicate();
+  }
+
+  function checkDuplicate() {
+    const item = batch.items[batch.selected];
     const warn = $("dup-warning");
+    if (!item) { warn.hidden = true; return; }
+
+    const dup = Storage.findByName(item.fields.name);
     if (dup.length) {
       const where = dup
         .map((p) => Storage.getOrganizationName(p.organization_id) || "所属なし")
@@ -253,31 +386,87 @@
     }
   }
 
-  $("btn-retry").addEventListener("click", function () { show("capture"); });
+  // 一覧のクリック（選択の切り替えと、チェックの入り切り）
+  $("batch-items").addEventListener("click", function (e) {
+    const check = e.target.closest("[data-check]");
+    if (check) {
+      const i = Number(check.dataset.check);
+      batch.items[i].include = check.checked;
+      renderBatchList();
+      renderLedger();
+      return;
+    }
+    const row = e.target.closest("[data-index]");
+    if (row) {
+      batch.selected = Number(row.dataset.index);
+      renderBatchList();
+      renderLedger();
+    }
+  });
+
+  $("btn-toggle-all").addEventListener("click", function () {
+    const allOn = batch.items.every((it) => it.include);
+    batch.items.forEach((it) => { it.include = !allOn; });
+    renderBatchList();
+    renderLedger();
+  });
+
+  $("btn-retry").addEventListener("click", () => show("capture"));
 
   $("btn-register").addEventListener("click", function () {
-    if (!String(current.fields.name || "").trim()) {
+    const targets = batch.items.filter((it) => it.include);
+    if (!targets.length) return;
+
+    // 氏名が空のものがあれば、そこへ案内する
+    const emptyIndex = batch.items.findIndex(
+      (it) => it.include && !String(it.fields.name || "").trim()
+    );
+    if (emptyIndex >= 0) {
+      batch.selected = emptyIndex;
+      if (batch.items.length > 1) renderBatchList();
+      renderLedger();
       const box = $("confirm-error");
-      box.textContent = "氏名が空です。名刺を見て入力してください。";
+      box.textContent = "氏名が空の名刺があります。入力するか、チェックを外してください。";
       box.hidden = false;
       $("fld-name").focus();
       return;
     }
 
-    const result = Storage.savePerson(current.fields, current.imageDataUrl);
+    let saved = 0;
+    let firstPerson = null;
+    let failMessage = "";
 
-    if (!result.ok) {
+    for (const it of targets) {
+      const r = Storage.savePerson(it.fields, it.thumb);
+      if (r.ok) {
+        saved++;
+        if (!firstPerson) firstPerson = Storage.getPerson(r.personId);
+      } else {
+        failMessage = r.error || "保存できませんでした。";
+        break;
+      }
+    }
+
+    if (!saved) {
       const box = $("confirm-error");
-      box.textContent = result.error || "保存できませんでした。";
+      box.textContent = failMessage || "保存できませんでした。";
       box.hidden = false;
       return;
     }
 
-    const p = Storage.getPerson(result.personId);
-    $("done-name").textContent = p.name + " さんを登録しました";
-    $("done-meta").textContent =
-      [Storage.getOrganizationName(p.organization_id), p.department, p.job_title]
-        .filter(Boolean).join("　／　") || "所属情報なし";
+    if (saved === 1 && firstPerson) {
+      $("done-name").textContent = firstPerson.name + " さんを登録しました";
+      $("done-meta").textContent =
+        [Storage.getOrganizationName(firstPerson.organization_id),
+         firstPerson.department, firstPerson.job_title]
+          .filter(Boolean).join("　／　") || "所属情報なし";
+    } else {
+      $("done-name").textContent = saved + " 件を登録しました";
+      $("done-meta").textContent = failMessage
+        ? "途中で保存できなくなりました：" + failMessage
+        : "ダッシュボードで一覧を確認できます。";
+    }
+    resetBatch();
     show("done");
   });
 
@@ -295,7 +484,7 @@
     URL.revokeObjectURL(a.href);
   });
 
-  $("btn-import").addEventListener("click", function () { $("import-file").click(); });
+  $("btn-import").addEventListener("click", () => $("import-file").click());
 
   $("import-file").addEventListener("change", function (e) {
     const file = e.target.files[0];
@@ -318,14 +507,17 @@
 
 
   /* =========================================================================
-     起動時の処理
+     起動時
      ========================================================================= */
 
-  // サイドバーに接続状態を出す（設定が正しいかすぐ分かるように）
   AI.ping().then(function (r) {
     const el = $("conn");
     el.className = "conn " + (r.ok ? "conn-ok" : "conn-ng");
     el.textContent = (r.ok ? "● " : "▲ ") + r.message;
+    if (r.ok && r.multi === false) {
+      el.className = "conn conn-warn";
+      el.textContent = "▲ Worker が古い版です。worker.js を貼り直してください。";
+    }
   });
 
   show("dashboard");

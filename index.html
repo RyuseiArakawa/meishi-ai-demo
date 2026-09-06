@@ -57,7 +57,7 @@
     <div class="card-grid">
       <button class="menu-card" data-screen="capture">
         <h2>名刺登録</h2>
-        <p>名刺の画像から、AIが記載事項を項目に分けます。内容を確認してから登録します。</p>
+        <p>名刺の画像やPDFから、AIが記載事項を項目に分けます。まとめて読み取れます。</p>
         <span class="menu-go">はじめる</span>
       </button>
       <div class="menu-card is-locked">
@@ -95,13 +95,13 @@
   <section id="screen-capture" class="screen" hidden>
     <header class="page-head">
       <h1>名刺登録</h1>
-      <p>名刺の画像を選ぶと、AIが記載内容を読み取ります。</p>
+      <p>1枚でも、まとめてでも読み取れます。名刺スキャナーで作ったPDFもそのまま使えます。</p>
     </header>
 
     <div id="capture-error" class="alert alert-error" hidden></div>
 
     <div id="dropzone" class="dropzone" tabindex="0" role="button"
-         aria-label="名刺画像を選ぶ">
+         aria-label="名刺の画像またはPDFを選ぶ">
       <div class="dz-icon" aria-hidden="true">
         <svg viewBox="0 0 40 26" width="52" height="34">
           <rect x="1" y="1" width="38" height="24" rx="2" fill="none"
@@ -113,33 +113,63 @@
                 stroke-width="1.4" stroke-linecap="round"/>
         </svg>
       </div>
-      <div class="dz-title">名刺を撮影する／画像を選ぶ</div>
-      <div class="dz-sub">ここにドラッグしても読み込めます</div>
+      <div class="dz-title">名刺を撮影する／画像・PDFを選ぶ</div>
+      <div class="dz-sub">複数まとめて選べます。ここにドラッグしても読み込めます</div>
     </div>
-    <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
 
+    <!-- 画像は複数選択可、PDFも受け付ける -->
+    <input type="file" id="file-input" accept="image/*,application/pdf" multiple hidden>
+    <!-- スマートフォンのカメラ用（1枚ずつ） -->
+    <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+
+    <div class="btn-row" id="capture-buttons">
+      <button class="btn" id="btn-pick">画像・PDFを選ぶ</button>
+      <button class="btn" id="btn-camera">カメラで撮る</button>
+    </div>
+
+    <!-- 読み取り中 -->
     <div id="reading" class="reading" hidden>
-      <img id="reading-preview" class="cardshot" alt="読み取り中の名刺">
-      <p class="progress"><span class="spinner" aria-hidden="true"></span>AIが名刺を読み取っています…</p>
+      <div class="progress-head">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="progress-text">準備しています…</span>
+      </div>
+      <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+      <p class="note" id="progress-detail"></p>
+      <div class="thumb-strip" id="thumb-strip"></div>
+      <div class="btn-row">
+        <button class="btn btn-sm" id="btn-stop">中止する</button>
+      </div>
     </div>
 
-    <p class="note">
-      画像は長辺1280ピクセルに縮小してから送信します。
+    <p class="note" id="capture-note">
+      画像は縮小してから送信します。PDFは1ページずつ画像に変換します。
+      1回に処理できるのは60ページまでです。
       これはデモです。実在する方の名刺は使用しないでください。
     </p>
   </section>
 
-  <!-- ---------- OCR確認 ---------- -->
+  <!-- ---------- 読み取り結果の確認 ---------- -->
   <section id="screen-confirm" class="screen" hidden>
     <header class="page-head">
       <h1>読み取り結果の確認</h1>
-      <p>AIが読み取った内容です。誤りを直してから登録してください。</p>
+      <p id="confirm-lede">AIが読み取った内容です。誤りを直してから登録してください。</p>
     </header>
 
+    <div id="skip-notice" class="alert alert-warn" hidden></div>
     <div id="dup-warning" class="alert alert-warn" hidden></div>
     <div id="confirm-error" class="alert alert-error" hidden></div>
 
-    <div class="confirm-layout">
+    <div class="confirm-layout" id="confirm-layout">
+
+      <!-- 複数枚のときだけ出る一覧 -->
+      <aside class="batch-list" id="batch-list" hidden>
+        <div class="batch-head">
+          <span id="batch-count">0件</span>
+          <button class="linkbtn" id="btn-toggle-all">すべて選ぶ</button>
+        </div>
+        <div id="batch-items"></div>
+      </aside>
+
       <div class="confirm-image">
         <img id="confirm-preview" class="cardshot" alt="読み取った名刺">
         <div class="legend">
@@ -157,6 +187,7 @@
           <button class="btn" id="btn-retry">やり直す</button>
         </div>
       </div>
+
     </div>
   </section>
 
@@ -178,6 +209,7 @@
 <script src="js/config.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/gemini.js"></script>
+<script src="js/pdf.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
