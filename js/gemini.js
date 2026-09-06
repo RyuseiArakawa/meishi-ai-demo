@@ -185,6 +185,51 @@ const AI = (function () {
   }
 
 
+  /* --- AI検索（Phase 5） --------------------------------------------------
+     設計書 §14 の構成にしたがい、2回に分けてWorkerを呼びます。
+       1回目 … 質問から検索語を取り出す（AIはデータベースを見ない）
+       2回目 … システムが検索した結果だけを渡して、回答を作らせる
+     ------------------------------------------------------------------------ */
+
+  async function post(payload) {
+    const url = endpoint();
+    if (!url) {
+      throw new Error(
+        "接続先が設定されていません。js/config.js の API_ENDPOINT に、" +
+        "Cloudflare Workers のURLを入れてください。"
+      );
+    }
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      throw new Error("サーバーに接続できませんでした。");
+    }
+    let json;
+    try { json = await res.json(); }
+    catch { throw new Error("サーバーからの応答を読み取れませんでした。"); }
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "サーバーがエラーを返しました（" + res.status + "）");
+    }
+    return json;
+  }
+
+  /** 質問から検索語を取り出す */
+  function readIntent(question) {
+    return post({ mode: "intent", question: question });
+  }
+
+  /** 検索結果だけを根拠に回答を作る */
+  function askAnswer(question, context) {
+    return post({ mode: "answer", question: question, context: context });
+  }
+
+
   /* --- 接続確認 ----------------------------------------------------------- */
 
   async function ping() {
@@ -198,6 +243,7 @@ const AI = (function () {
           ok: true,
           message: "接続できました（モデル: " + json.model + "）",
           multi: json.multi === true,
+          aiSearch: json.ai_search === true,
         };
       }
       return { ok: false, message: json.error || "応答が想定と違います。" };
@@ -213,6 +259,8 @@ const AI = (function () {
     filesToPages: filesToPages,
     readPage: readPage,
     readPages: readPages,
+    readIntent: readIntent,
+    askAnswer: askAnswer,
     ping: ping,
   };
 })();

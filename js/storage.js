@@ -475,6 +475,135 @@ const Storage = (function () {
     return persist();
   }
 
+  /* --- AI検索のための検索関数（Phase 5）― 設計書 §14 -------------------------
+
+     AIにデータベースを直接触らせないため、決まった形の検索だけを用意します。
+     AIから受け取るのは「検索語」だけで、実際に探すのはこの関数です。
+     -------------------------------------------------------------------------- */
+
+  /** 専門分野から人物を探す（search_people_by_topic） */
+  function searchPeopleByTopic(keyword) {
+    const k = fold(keyword);
+    if (!k) return [];
+    const hits = [];
+    db.person_topics.forEach(function (pt) {
+      const t = db.topics.find((x) => x.id === pt.topic_id);
+      if (!t || !fold(t.name).includes(k)) return;
+      const p = getPerson(pt.person_id);
+      if (p) hits.push({ person: p, topic: t.name, source: pt.source, via: "専門分野" });
+    });
+    return hits;
+  }
+
+  /** 所属・部署・役職・氏名から人物を探す（search_people_by_attribute） */
+  function searchPeopleByAttribute(keyword) {
+    const k = fold(keyword);
+    if (!k) return [];
+    return db.persons.filter(function (p) {
+      const bag = [p.name, p.name_kana, getOrganizationName(p.organization_id),
+                   p.department, p.job_title].join(" ");
+      return fold(bag).includes(k);
+    }).map((p) => ({ person: p, via: "所属・氏名" }));
+  }
+
+  /** 交流の記録から人物を探す（search_interactions） */
+  function searchPeopleByInteraction(keyword) {
+    const k = fold(keyword);
+    if (!k) return [];
+    const hits = [];
+    db.interactions.forEach(function (i) {
+      const bag = [i.event_name, i.location, i.summary].join(" ");
+      if (!fold(bag).includes(k)) return;
+      const p = getPerson(i.person_id);
+      if (p) hits.push({ person: p, via: "交流の記録" });
+    });
+    return hits;
+  }
+
+  /**
+   * AIが取り出した検索語で、上の関数をまとめて呼ぶ。
+   * @param keywords     専門分野・組織などの語
+   * @param personNames  質問に出てきた人物名
+   * @param expand       見つかった人物と関係のある人も含めるか
+   * @returns {{ids:string[], trace:object[]}}  ids = 見つかった人物、trace = 検索の記録
+   */
+  function runSearch(keywords, personNames, expand) {
+    const found = {};        // person_id → 見つかった理由
+    const trace = [];
+
+    (personNames || []).forEach(function (name) {
+      const hits = searchPeopleByAttribute(name);
+      trace.push({ fn: "search_people_by_attribute", arg: name, count: hits.length });
+      hits.forEach((h) => { found[h.person.id] = found[h.person.id] || "氏名の一致"; });
+    });
+
+    (keywords || []).forEach(function (kw) {
+      const t = searchPeopleByTopic(kw);
+      trace.push({ fn: "search_people_by_topic", arg: kw, count: t.length });
+      t.forEach((h) => { found[h.person.id] = "専門分野「" + h.topic + "」"; });
+
+      const a = searchPeopleByAttribute(kw);
+      trace.push({ fn: "search_people_by_attribute", arg: kw, count: a.length });
+      a.forEach((h) => { found[h.person.id] = found[h.person.id] || "所属・氏名の一致"; });
+
+      const i = searchPeopleByInteraction(kw);
+      trace.push({ fn: "search_interactions", arg: kw, count: i.length });
+      i.forEach((h) => { found[h.person.id] = found[h.person.id] || "交流の記録"; });
+    });
+
+    // 人物名で引いた場合は、その人とつながっている人も材料に加える
+    if (expand) {
+      Object.keys(found).slice(0, 4).forEach(function (id) {
+        const rels = getRelationshipsOf(id);
+        trace.push({ fn: "search_relationships", arg: (getPerson(id) || {}).name, count: rels.length });
+        rels.forEach(function (r) {
+          if (!found[r.other_id]) {
+            found[r.other_id] = "「" + (getPerson(id) || {}).name + "」との関係";
+          }
+        });
+      });
+    }
+
+    return { ids: Object.keys(found), reasons: found, trace: trace };
+  }
+
+  /**
+   * AIに渡す材料を組み立てる。
+   *
+   * 設計書 §21「LLMには不要な個人情報を渡さない」にしたがい、
+   * メールアドレス・電話番号・住所は含めません。
+   * 人物を探すのに必要なのは、所属と専門と関係だけです。
+   */
+  function buildAIContext(ids, limit) {
+    return (ids || []).slice(0, limit || 12).map(function (id) {
+      const p = getPerson(id);
+      if (!p) return null;
+      return {
+        person_id: p.id,
+        name: p.name,
+        organization: getOrganizationName(p.organization_id) || null,
+        department: p.department,
+        job_title: p.job_title,
+        topics: getTopicsOf(p.id).map((t) => ({ name: t.name, source: t.source })),
+        relations: getRelationshipsOf(p.id).map(function (r) {
+          const o = getPerson(r.other_id);
+          return {
+            other_person_id: r.other_id,
+            other_name: o ? o.name : null,
+            type: relationshipLabel(r.relationship_type),
+            strength: r.strength,
+            source: r.source,
+            notes: r.notes,
+          };
+        }),
+        interactions: getInteractionsOf(p.id).map((i) => ({
+          date: String(i.occurred_at || "").slice(0, 10) || null,
+          event: i.event_name, place: i.location, summary: i.summary,
+        })),
+      };
+    }).filter(Boolean);
+  }
+
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
@@ -536,6 +665,10 @@ const Storage = (function () {
     RELATIONSHIP_TYPES, relationshipLabel, isDirected,
     getRelationshipsOf, findRelationshipBetween,
     addRelationship, removeRelationship, flipRelationship,
+
+    // AI検索のための検索関数（Phase 5）
+    searchPeopleByTopic, searchPeopleByAttribute, searchPeopleByInteraction,
+    runSearch, buildAIContext,
 
     // その他
     getStats, exportJSON, importJSON, clearAll,

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
 
@@ -26,12 +26,12 @@
     <li><button class="nav-item" data-screen="capture">名刺登録</button></li>
     <li><button class="nav-item" data-screen="people">人物</button></li>
     <li><button class="nav-item" data-screen="graph">人脈</button></li>
-    <li><button class="nav-item is-locked" disabled>AI検索<span class="phase">Phase 5</span></button></li>
+    <li><button class="nav-item" data-screen="ai">AI検索</button></li>
   </ul>
 
   <div class="sidebar-foot">
     <div id="conn" class="conn conn-unknown">接続を確認中…</div>
-    <p>デモ版 Phase 4<br>架空の名刺で操作してください</p>
+    <p>デモ版 Phase 5<br>架空の名刺で操作してください</p>
   </div>
 </nav>
 
@@ -72,10 +72,11 @@
         <p>人物をノード、関係をエッジとして図に表示します。2人の間の経路も探せます。</p>
         <span class="menu-go">ひらく</span>
       </button>
-      <div class="menu-card is-locked">
-        <h2>AI検索<span class="phase">Phase 5</span></h2>
+      <button class="menu-card" data-screen="ai">
+        <h2>AI検索</h2>
         <p>「旋盤加工について相談できる人は」といった質問に、登録情報だけを根拠に答えます。</p>
-      </div>
+        <span class="menu-go">ひらく</span>
+      </button>
     </div>
 
     <section class="block">
@@ -230,6 +231,20 @@
     </div>
   </section>
 
+  <!-- ---------- AI検索（Phase 5） ---------- -->
+  <section id="screen-ai" class="screen" hidden>
+    <header class="page-head">
+      <h1>AI検索</h1>
+      <p>登録されている情報だけを根拠に答えます。AIがデータベースを直接検索することはありません。</p>
+    </header>
+
+    <div id="ai-form" class="ai-form"></div>
+    <div class="ai-layout">
+      <div id="ai-result" class="ai-result" hidden></div>
+      <aside id="ai-steps" class="ai-steps" hidden></aside>
+    </div>
+  </section>
+
   <!-- ---------- 人物詳細（Phase 2） ---------- -->
   <section id="screen-person" class="screen" hidden>
     <p class="backline"><button class="linkbtn" data-screen="people">← 人物一覧へもどる</button></p>
@@ -238,12 +253,13 @@
 
 </main>
 
-<script src="js/config.js?v=5"></script>
-<script src="js/storage.js?v=5"></script>
-<script src="js/gemini.js?v=5"></script>
-<script src="js/pdf.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
-<script src="js/people.js?v=5"></script>
-<script src="js/graph.js?v=5"></script>
+<script src="js/config.js?v=6"></script>
+<script src="js/storage.js?v=6"></script>
+<script src="js/gemini.js?v=6"></script>
+<script src="js/pdf.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
+<script src="js/people.js?v=6"></script>
+<script src="js/graph.js?v=6"></script>
+<script src="js/ai-search.js?v=6"></script>
 </body>
 </html>
