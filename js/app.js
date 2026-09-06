@@ -84,6 +84,7 @@
     $("stat-persons").textContent = s.persons;
     $("stat-orgs").textContent = s.organizations;
     $("stat-topics").textContent = s.topics;
+    $("stat-relations").textContent = s.relationships;
     $("stat-cards").textContent = s.cards;
     $("stat-size").innerHTML = (s.bytes / 1024 / 1024).toFixed(2) + "<i>MB</i>";
 

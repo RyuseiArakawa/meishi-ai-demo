@@ -153,6 +153,125 @@ const People = (function () {
      人物詳細
      ========================================================================= */
 
+  /* --- 人物同士の関係（Phase 3） ----------------------------------------- */
+
+  // 強さの目安。数字だけでは意味が伝わらないため、言葉を添える。
+  const STRENGTH_LABEL = {
+    1: "1　一度会っただけ",
+    2: "2　同じ場に居合わせた程度",
+    3: "3　仕事のやりとりがある",
+    4: "4　継続的に協力している",
+    5: "5　日常的にやりとりがある",
+  };
+
+  function strengthDots(n) {
+    const s = Math.max(0, Math.min(5, Number(n) || 0));
+    return '<span class="dots" title="強さ ' + s + ' / 5">'
+      + "●".repeat(s) + '<span class="dots-off">' + "●".repeat(5 - s) + "</span></span>";
+  }
+
+  function relationsHtml(p, rels) {
+    if (!rels.length) return '<p class="empty" style="margin-bottom:14px">まだ登録されていません。</p>';
+
+    return '<ul class="rel-list">' + rels.map(function (r) {
+      const other = Storage.getPerson(r.other_id);
+      const otherName = other ? other.name : "（削除された人物）";
+      const otherOrg = other ? Storage.getOrganizationName(other.organization_id) : "";
+      const directed = Storage.isDirected(r.relationship_type);
+
+      // 向きに意味がある種類だけ、どちらが起点かを示す
+      const arrow = directed
+        ? '<span class="rel-arrow">' +
+            (r.direction === "out"
+              ? esc(p.name) + " → " + esc(otherName)
+              : esc(otherName) + " → " + esc(p.name)) +
+          "</span>"
+        : "";
+
+      return "<li>"
+        + '<div class="rel-main">'
+        +   '<span class="rel-type">' + esc(Storage.relationshipLabel(r.relationship_type)) + "</span>"
+        +   '<button class="rel-name" data-screen="person" data-id="' + r.other_id + '">'
+        +     esc(otherName) + "</button>"
+        +   (otherOrg ? '<span class="rel-org">' + esc(otherOrg) + "</span>" : "")
+        +   strengthDots(r.strength)
+        + "</div>"
+        + arrow
+        + '<div class="rel-src">根拠：' + esc(r.source || "（未記入）")
+        +   (r.notes ? "　／　" + esc(r.notes) : "") + "</div>"
+        + '<div class="rel-actions">'
+        +   (directed
+              ? '<button class="linkbtn" data-flip-rel="' + r.id + '">向きを入れ替える</button>'
+              : "")
+        +   '<button class="linkbtn" data-del-rel="' + r.id + '">削除</button>'
+        + "</div>"
+        + "</li>";
+    }).join("") + "</ul>";
+  }
+
+  function relationFormHtml(p) {
+    // すでに関係を登録した相手は、選択肢から外す
+    const linked = new Set(Storage.getRelationshipsOf(p.id).map((r) => r.other_id));
+    const others = Storage.searchPersons("", "", "name").filter((x) => x.id !== p.id);
+
+    if (!others.length) {
+      return '<p class="note">関係を登録するには、相手も登録されている必要があります。</p>';
+    }
+
+    return '<div class="rel-form">'
+      + '<div class="rel-form-row">'
+      +   '<label for="rel-other">相手</label>'
+      +   '<select id="rel-other">'
+      +     '<option value="">選んでください</option>'
+      +     others.map(function (x) {
+            const org = Storage.getOrganizationName(x.organization_id);
+            return '<option value="' + x.id + '">' + esc(x.name)
+              + (org ? "（" + esc(org) + "）" : "")
+              + (linked.has(x.id) ? "　※登録済みの関係あり" : "") + "</option>";
+          }).join("")
+      +   "</select>"
+      + "</div>"
+      + '<div class="rel-form-row">'
+      +   '<label for="rel-type">種類</label>'
+      +   '<select id="rel-type">'
+      +     '<option value="">選んでください</option>'
+      +     Storage.RELATIONSHIP_TYPES.map((t) =>
+            '<option value="' + t.value + '">' + esc(t.label)
+            + (t.directed ? "（向きあり）" : "") + "</option>").join("")
+      +   "</select>"
+      + "</div>"
+      + '<div class="rel-form-row">'
+      +   '<label for="rel-strength">強さ</label>'
+      +   '<select id="rel-strength">'
+      +     '<option value="">選んでください</option>'
+      +     [1, 2, 3, 4, 5].map((n) =>
+            '<option value="' + n + '">' + esc(STRENGTH_LABEL[n]) + "</option>").join("")
+      +   "</select>"
+      + "</div>"
+      + '<div class="rel-form-row">'
+      +   '<label for="rel-source">根拠</label>'
+      +   '<input type="text" id="rel-source" list="rel-source-list"'
+      +     ' placeholder="例：共著論文（2026）／本人から聞いた">'
+      +   '<datalist id="rel-source-list">'
+      +     ["本人から聞いた", "共著論文", "同じ組織の名刺", "名刺交換した",
+             "展示会で聞いた", "紹介を受けた", "学会で同席した"]
+            .map((v) => '<option value="' + v + '">').join("")
+      +   "</datalist>"
+      + "</div>"
+      + '<div class="rel-form-row">'
+      +   '<label for="rel-notes">備考</label>'
+      +   '<input type="text" id="rel-notes" placeholder="任意">'
+      + "</div>"
+      + '<div class="btn-row" style="margin-top:6px">'
+      +   '<button class="btn btn-sm" id="btn-add-rel">関係を登録する</button>'
+      + "</div>"
+      + '<p class="note" style="margin-top:8px">'
+      +   "強さと根拠は必ず入力してください。"
+      +   "この2つが無いと、Phase 5 のAI検索で「なぜこの人を挙げたか」を示せなくなります。"
+      + "</p>"
+      + "</div>";
+  }
+
   const EDIT_FIELDS = [
     { key: "name",         label: "氏名" },
     { key: "name_kana",    label: "ふりがな" },
@@ -181,6 +300,7 @@ const People = (function () {
     const org = Storage.getOrganizationName(p.organization_id);
     const topics = Storage.getTopicsOf(p.id);
     const logs = Storage.getInteractionsOf(p.id);
+    const rels = Storage.getRelationshipsOf(p.id);
     const mates = Storage.getColleagues(p.id);
 
     $("person-body").innerHTML =
@@ -240,6 +360,18 @@ const People = (function () {
       +   '<datalist id="topic-list">'
       +     Storage.getAllTopics().map((t) => '<option value="' + esc(t.name) + '">').join("")
       +   "</datalist>"
+      + "</section>"
+
+      /* ---- 人物同士の関係（Phase 3） ---- */
+      + '<section class="block">'
+      +   "<h3>人物同士の関係</h3>"
+      +   '<p class="note" style="margin:-6px 0 12px">'
+      +     "実際にあったつながりだけを登録します。"
+      +     "同じ組織にいることや同じ学会に出たことから、システムが関係を作ることはありません。"
+      +     "強さと根拠も、人が入力します。"
+      +   "</p>"
+      +   relationsHtml(p, rels)
+      +   relationFormHtml(p)
       + "</section>"
 
       /* ---- 交流の記録 ---- */
@@ -379,6 +511,21 @@ const People = (function () {
       renderDetail();
     });
 
+    // 関係の登録
+    const addRel = $("btn-add-rel");
+    if (addRel) addRel.addEventListener("click", function () {
+      const r = Storage.addRelationship(
+        p.id,
+        $("rel-other").value,
+        $("rel-type").value,
+        $("rel-strength").value,
+        $("rel-source").value,
+        $("rel-notes").value
+      );
+      detail.message = r.ok ? "" : (r.error || "");
+      renderDetail();
+    });
+
     const del = $("btn-del-person");
     if (del) del.addEventListener("click", function () {
       if (!confirm(p.name + " を削除します。元に戻せません。")) return;
@@ -405,6 +552,12 @@ const People = (function () {
 
       const l = e.target.closest("[data-del-log]");
       if (l) { Storage.removeInteraction(l.dataset.delLog); renderDetail(); return; }
+
+      const rd = e.target.closest("[data-del-rel]");
+      if (rd) { Storage.removeRelationship(rd.dataset.delRel); renderDetail(); return; }
+
+      const rf = e.target.closest("[data-flip-rel]");
+      if (rf) { Storage.flipRelationship(rf.dataset.flipRel); renderDetail(); return; }
     });
   }
 

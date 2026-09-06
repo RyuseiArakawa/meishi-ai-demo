@@ -374,6 +374,107 @@ const Storage = (function () {
     return persist();
   }
 
+  /* --- 人物同士の関係（relationships）― Phase 3 ------------------------------
+
+     設計書 §9 の指示にしたがい、関係は「人が登録した事実」だけを持ちます。
+     ・同じ組織にいる、同じ学会に出た、といった事実から関係を自動生成しない
+     ・関係の強さをシステムが推測しない（人が選ぶ）
+     ・どこで知った情報かを必ず残す（source）
+     -------------------------------------------------------------------------- */
+
+  // 関係の種類。directed が true のものは「向き」に意味がある。
+  const RELATIONSHIP_TYPES = [
+    { value: "card_exchange",   label: "名刺交換",   directed: false },
+    { value: "colleague",       label: "同僚",       directed: false },
+    { value: "joint_research",  label: "共同研究",   directed: false },
+    { value: "same_conference", label: "同じ学会",   directed: false },
+    { value: "business",        label: "取引関係",   directed: false },
+    { value: "introduction",    label: "紹介",       directed: true  },
+    { value: "mentorship",      label: "指導関係",   directed: true  },
+    { value: "other",           label: "その他",     directed: false },
+  ];
+
+  function relationshipLabel(type) {
+    const t = RELATIONSHIP_TYPES.find((x) => x.value === type);
+    return t ? t.label : type;
+  }
+  function isDirected(type) {
+    const t = RELATIONSHIP_TYPES.find((x) => x.value === type);
+    return t ? t.directed : false;
+  }
+
+  /**
+   * ある人物にひもづく関係をすべて返す。
+   * 相手がどちらの側にいても拾い、この人物から見た向きを添える。
+   *   direction "out" … この人物が起点（from）
+   *   direction "in"  … 相手が起点（to がこの人物）
+   */
+  function getRelationshipsOf(personId) {
+    return db.relationships
+      .filter((r) => r.from_person_id === personId || r.to_person_id === personId)
+      .map(function (r) {
+        const out = r.from_person_id === personId;
+        return Object.assign({}, r, {
+          direction: out ? "out" : "in",
+          other_id: out ? r.to_person_id : r.from_person_id,
+        });
+      })
+      .sort((a, b) => (b.strength || 0) - (a.strength || 0));
+  }
+
+  /** 2人の間にすでに登録されている関係（種類は問わない） */
+  function findRelationshipBetween(a, b, type) {
+    return db.relationships.find((r) =>
+      ((r.from_person_id === a && r.to_person_id === b) ||
+       (r.from_person_id === b && r.to_person_id === a)) &&
+      (type ? r.relationship_type === type : true)
+    ) || null;
+  }
+
+  function addRelationship(fromId, toId, type, strength, source, notes) {
+    if (!fromId || !toId) return { ok: false, error: "相手を選んでください。" };
+    if (fromId === toId) return { ok: false, error: "同じ人物どうしの関係は登録できません。" };
+    if (!type) return { ok: false, error: "関係の種類を選んでください。" };
+
+    const s = Number(strength);
+    if (!(s >= 1 && s <= 5)) {
+      return { ok: false, error: "関係の強さを選んでください。システムは推測しません。" };
+    }
+    if (!clean(source)) {
+      return { ok: false, error: "根拠を入力してください。どこで知った情報かを残します。" };
+    }
+    if (findRelationshipBetween(fromId, toId, type)) {
+      return { ok: false, error: "この2人には、同じ種類の関係がすでに登録されています。" };
+    }
+
+    db.relationships.push({
+      id: uuid(),
+      from_person_id: fromId,
+      to_person_id: toId,
+      relationship_type: type,
+      strength: s,
+      source: clean(source),
+      notes: clean(notes),
+      created_at: nowISO(),
+    });
+    return { ok: persist(), error: lastError };
+  }
+
+  function removeRelationship(id) {
+    db.relationships = db.relationships.filter((r) => r.id !== id);
+    return persist();
+  }
+
+  /** 向きを入れ替える（「指導した／指導を受けた」を直すときに使う） */
+  function flipRelationship(id) {
+    const r = db.relationships.find((x) => x.id === id);
+    if (!r) return false;
+    const tmp = r.from_person_id;
+    r.from_person_id = r.to_person_id;
+    r.to_person_id = tmp;
+    return persist();
+  }
+
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
@@ -383,6 +484,7 @@ const Storage = (function () {
       cards: db.business_cards.length,
       topics: db.topics.length,
       interactions: db.interactions.length,
+      relationships: db.relationships.length,
       bytes: new Blob([JSON.stringify(db)]).size,
     };
   }
@@ -429,6 +531,11 @@ const Storage = (function () {
 
     // 交流
     getInteractionsOf, addInteraction, removeInteraction,
+
+    // 人物同士の関係（Phase 3）
+    RELATIONSHIP_TYPES, relationshipLabel, isDirected,
+    getRelationshipsOf, findRelationshipBetween,
+    addRelationship, removeRelationship, flipRelationship,
 
     // その他
     getStats, exportJSON, importJSON, clearAll,
