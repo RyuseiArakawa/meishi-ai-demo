@@ -531,7 +531,10 @@ input[type=text], input[type=date], input[type=search], select {
 
 /* ===== 人脈グラフ（Phase 4） ============================================= */
 
-.graph-controls { align-items: center; }
+.graph-controls { align-items: center; gap: 8px 14px; }
+.graph-controls .gctl > label { font-size: 12px; }
+.graph-controls .select { min-width: 0; }
+.graph-controls .select-sm { min-width: 96px; }
 .gctl { display: flex; align-items: center; gap: 8px; }
 .gctl > label { font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
 .gctl input[type=checkbox] { accent-color: var(--ink); margin-right: 4px; }
@@ -539,14 +542,25 @@ input[type=text], input[type=date], input[type=search], select {
 .gctl-path .select { min-width: 150px; }
 .gctl-arrow { color: var(--muted); }
 
-.graph-layout { display: grid; grid-template-columns: 1fr 310px; gap: 16px; align-items: start; }
-@media (max-width: 980px) { .graph-layout { grid-template-columns: 1fr; } }
+/* 図と右の説明を、画面の高さに収める。
+   組織が増えると右の説明が長くなり、ページ全体が縦に伸びてしまうため、
+   高さを決めて、はみ出す分は説明の中だけでスクロールさせる。 */
+.graph-layout {
+  display: grid; grid-template-columns: 1fr 320px; gap: 16px;
+  align-items: stretch;
+  height: calc(100vh - 290px); min-height: 440px;
+}
+@media (max-width: 980px) {
+  .graph-layout { grid-template-columns: 1fr; height: auto; }
+  .graph-canvas { height: 60vh; min-height: 320px; }
+  .graph-panel { max-height: 46vh; }
+}
 
 .graph-canvas {
   background: var(--paper); border: 1px solid var(--rule);
-  border-radius: 3px; overflow: hidden;
+  border-radius: 3px; overflow: hidden; height: 100%;
 }
-.graph-svg { display: block; width: 100%; height: auto; touch-action: none; }
+.graph-svg { display: block; width: 100%; height: 100%; touch-action: none; }
 
 .edge line { stroke: #97a3ac; }
 .edge.is-dim line { stroke: #dfe4e7; }
@@ -567,6 +581,7 @@ input[type=text], input[type=date], input[type=search], select {
 .graph-panel {
   background: var(--paper); border: 1px solid var(--rule);
   border-radius: 3px; padding: 16px 18px; font-size: 14px;
+  overflow-y: auto;          /* 長くなっても、この中だけで収める */
 }
 .graph-panel .alert { margin-bottom: 14px; }
 .alert-ok { background: var(--ok-bg); border-left: 3px solid var(--ok); color: #1e5240; }
@@ -588,7 +603,8 @@ input[type=text], input[type=date], input[type=search], select {
 .lg-thin { border-top: 2px dashed #97a3ac; }
 .lg-thick { border-top: 4px solid #97a3ac; }
 .lg-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-.lg-orgs { margin-top: 8px; }
+/* 組織が多いと凡例が長くなるので、この枠の中でスクロールさせる */
+.lg-orgs { margin-top: 8px; max-height: 128px; overflow-y: auto; }
 
 /* ===== AI検索（Phase 5） ================================================= */
 
