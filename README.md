@@ -1,4 +1,5 @@
-# Organization Knowledge ― 組織内人脈・知識グラフ型 名刺OCR AIシステム
+# Organization Knowledge
+# 組織内人脈・知識グラフ型 名刺OCR AIシステム
 
 **Phase 1：名刺登録 → AIによる読み取り → 確認 → 保存**
 
