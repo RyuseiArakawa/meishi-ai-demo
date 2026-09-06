@@ -26,14 +26,23 @@ const People = (function () {
 
   /* =========================================================================
      人物一覧
+
+     大事な点：
+       検索欄そのものは、画面に入ったときに一度だけ作ります。
+       文字を打つたびに作り直すと、日本語入力の変換が途中で中断されてしまい、
+       ローマ字のまま確定できなくなるためです。
+       打っている間に描き直すのは、下の一覧だけにします。
      ========================================================================= */
 
-  function renderList() {
-    const all = Storage.getPersons();
-    const orgs = Storage.getOrganizations();
-    const list = Storage.searchPersons(filter.query, filter.orgId, filter.sort);
+  /** 画面に入ったとき。検索欄を組み立ててから一覧を描く */
+  function enter() {
+    renderControls();
+    renderList();
+  }
 
-    // 絞り込みの操作部分
+  function renderControls() {
+    const orgs = Storage.getOrganizations();
+
     $("people-controls").innerHTML =
         '<input type="search" id="pq" class="search" placeholder="氏名・組織・専門分野で探す"'
       + ' value="' + esc(filter.query) + '" autocomplete="off">'
@@ -44,16 +53,58 @@ const People = (function () {
             + esc(o.name) + "（" + o.count + "）</option>").join("")
       + "</select>"
       + '<select id="psort" class="select">'
-      +   '<option value="name"' + (filter.sort === "name" ? " selected" : "") + ">ふりがな順</option>"
+      +   '<option value="name"' + (filter.sort === "name" ? " selected" : "") + ">氏名順（ふりがな優先）</option>"
       +   '<option value="new"'  + (filter.sort === "new"  ? " selected" : "") + ">登録の新しい順</option>"
       +   '<option value="org"'  + (filter.sort === "org"  ? " selected" : "") + ">組織ごと</option>"
       + "</select>";
+
+    const q = $("pq");
+
+    // 日本語入力の変換中は検索しない。
+    // compositionstart で変換開始、compositionend で確定が伝わる。
+    let composing = false;
+    q.addEventListener("compositionstart", function () { composing = true; });
+    q.addEventListener("compositionend", function () {
+      composing = false;
+      filter.query = q.value;
+      renderList();
+    });
+    q.addEventListener("input", function () {
+      if (composing) return;          // 変換の途中なので、まだ検索しない
+      filter.query = q.value;
+      renderList();
+    });
+
+    $("porg").addEventListener("change", function () {
+      filter.orgId = this.value; renderList();
+    });
+    $("psort").addEventListener("change", function () {
+      filter.sort = this.value; renderList();
+    });
+  }
+
+  /** 一覧だけを描き直す（検索欄には触らない） */
+  function renderList() {
+    const all = Storage.getPersons();
+    const list = Storage.searchPersons(filter.query, filter.orgId, filter.sort);
 
     $("people-count").textContent = all.length
       ? list.length + " 件を表示（登録 " + all.length + " 件）"
       : "";
 
-    // 一覧本体
+    // ふりがな順を選んでいるのに、ふりがなが入っていない人がいる場合の説明
+    const noKana = Storage.countWithoutKana(list);
+    const hint = $("people-hint");
+    if (filter.sort === "name" && noKana > 0) {
+      hint.hidden = false;
+      hint.textContent =
+        "ふりがなが未登録の人物が " + noKana + " 件あります。"
+        + "その人たちは漢字の並びで表示しています。"
+        + "人物の画面で「編集する」からふりがなを入れると、読みの順に並びます。";
+    } else {
+      hint.hidden = true;
+    }
+
     if (!all.length) {
       $("people-list").innerHTML =
           '<div class="empty-box">'
@@ -64,11 +115,14 @@ const People = (function () {
       $("people-list").innerHTML =
           '<div class="empty-box"><p>条件に合う人物がいません。</p>'
         + '<button class="btn btn-sm" id="btn-clear-filter">条件を消す</button></div>';
+      const clear = $("btn-clear-filter");
+      if (clear) clear.addEventListener("click", function () {
+        filter = { query: "", orgId: "", sort: filter.sort };
+        enter();
+      });
     } else {
       $("people-list").innerHTML = list.map(rowHtml).join("");
     }
-
-    wireList();
   }
 
   function rowHtml(p) {
@@ -92,31 +146,6 @@ const People = (function () {
                 '<span class="chip">' + esc(t.name) + "</span>").join("") + "</span>"
             : "")
       + "</span></button>";
-  }
-
-  function wireList() {
-    const q = $("pq");
-    if (q) {
-      q.addEventListener("input", function () {
-        filter.query = q.value;
-        const pos = q.selectionStart;
-        renderList();
-        const nq = $("pq");
-        if (nq) { nq.focus(); nq.setSelectionRange(pos, pos); }
-      });
-    }
-    const org = $("porg");
-    if (org) org.addEventListener("change", function () {
-      filter.orgId = org.value; renderList();
-    });
-    const sort = $("psort");
-    if (sort) sort.addEventListener("change", function () {
-      filter.sort = sort.value; renderList();
-    });
-    const clear = $("btn-clear-filter");
-    if (clear) clear.addEventListener("click", function () {
-      filter = { query: "", orgId: "", sort: filter.sort }; renderList();
-    });
   }
 
 
@@ -380,5 +409,5 @@ const People = (function () {
   }
 
 
-  return { renderList: renderList, renderDetail: renderDetail };
+  return { enter: enter, renderList: renderList, renderDetail: renderDetail };
 })();

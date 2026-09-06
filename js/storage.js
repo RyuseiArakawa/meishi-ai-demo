@@ -262,15 +262,32 @@ const Storage = (function () {
       list.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     } else if (sort === "org") {
       list.sort((a, b) =>
-        getOrganizationName(a.organization_id).localeCompare(
-          getOrganizationName(b.organization_id), "ja") ||
-        String(a.name_kana || a.name).localeCompare(String(b.name_kana || b.name), "ja")
-      );
+        collator.compare(getOrganizationName(a.organization_id),
+                         getOrganizationName(b.organization_id))
+        || collator.compare(readingOf(a), readingOf(b)));
     } else {
-      list.sort((a, b) =>
-        String(a.name_kana || a.name).localeCompare(String(b.name_kana || b.name), "ja"));
+      list.sort((a, b) => collator.compare(readingOf(a), readingOf(b)));
     }
     return list;
+  }
+
+  /* 日本語の並び替え。
+     ひらがなとカタカナの違いは無視して同じものとして扱う。 */
+  const collator = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
+
+  /* 並び替えに使う読み。
+     ふりがなが登録されていればそれを、無ければ漢字をそのまま使う。
+     漢字には読み方の情報がないため、この場合は文字コードの順になる。 */
+  function readingOf(p) {
+    const kana = String(p.name_kana || "").trim();
+    return kana || String(p.name || "");
+  }
+
+  /** ふりがなが未登録の人数（画面で理由を説明するために使う） */
+  function countWithoutKana(list) {
+    return (list || db.persons).filter(
+      (p) => !String(p.name_kana || "").trim()
+    ).length;
   }
 
   /* --- 専門分野（topics / person_topics） --------------------------------- */
@@ -402,7 +419,7 @@ const Storage = (function () {
     // 人物
     getPersons, getPerson, getCardOf, searchPersons,
     savePerson, updatePerson, deletePerson,
-    findByName, getColleagues,
+    findByName, getColleagues, countWithoutKana,
 
     // 組織
     getOrganizationName, getOrganizations,

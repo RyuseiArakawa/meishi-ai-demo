@@ -63,7 +63,7 @@
 
     if (name === "dashboard") renderDashboard();
     if (name === "capture") resetCapture();
-    if (name === "people") People.renderList();
+    if (name === "people") People.enter();
     if (name === "person") People.renderDetail(id);
 
     window.scrollTo(0, 0);

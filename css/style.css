@@ -472,3 +472,9 @@ input[type=text], input[type=date], input[type=search], select {
   .batch-list { max-height: 300px; }
   .pdetail-name { font-size: 23px; }
 }
+
+/* ふりがな未登録の説明など、一覧の上に出す控えめな案内 */
+.hintline {
+  background: var(--field); border-left: 3px solid var(--rule2);
+  padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 0 0 12px; max-width: none;
+}
