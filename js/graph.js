@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 16;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 19;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -103,6 +103,7 @@ const Graph = (function () {
       return {
         id: p.id,
         name: p.name,
+        kana: p.name_kana || "",
         // 組織内で、この人と名刺を交換しているのが1人だけかどうか
         soleContact: Storage.getUsersWhoKnow(p.id).length === 1,
         orgId: p.organization_id,
@@ -418,6 +419,149 @@ const Graph = (function () {
      どれとどれが同じ設定なのか分からなくなっていました。
      ------------------------------------------------------------------------- */
 
+  /* -------------------------------------------------------------------------
+     人を選ぶ入力欄
+
+     打ち込みながら候補を出します。何も打たずに押せば全員が出るので、
+     一覧から選ぶ使い方もできます。
+     人数が増えると、選択式だけでは目当ての人を探しにくいためです。
+     ------------------------------------------------------------------------- */
+
+  // 探すときの文字ゆれを吸収する（全角と半角、大文字と小文字）
+  function fold(v) {
+    return String(v || "")
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+      .replace(/[\s\u3000]/g, "")
+      .toLowerCase();
+  }
+
+  const labelOf = (id) => {
+    const n = nodeById(id);
+    return n ? n.name : "";
+  };
+
+  function comboHtml(id, value, placeholder) {
+    return '<span class="combo" id="' + id + '-box">'
+      + '<input type="text" class="combo-input" id="' + id + '"'
+      +   ' value="' + esc(labelOf(value)) + '"'
+      +   ' placeholder="' + esc(placeholder) + '" autocomplete="off"'
+      +   ' role="combobox" aria-expanded="false" aria-autocomplete="list">'
+      + '<button class="combo-open" id="' + id + '-open" tabindex="-1"'
+      +   ' aria-label="一覧から選ぶ">▾</button>'
+      + '<span class="combo-list" id="' + id + '-list" hidden></span>'
+      + "</span>";
+  }
+
+  /** 打ち込みに合う人を、上から順に返す */
+  function candidates(query) {
+    const q = fold(query);
+    const list = state.nodes.filter(function (n) {
+      if (!q) return true;
+      return fold(n.name + " " + (n.kana || "") + " " + (n.org || "")).indexOf(q) >= 0;
+    });
+    // 社内の利用者を先に出す（自分から探すことが多いため）
+    list.sort(function (a, b) {
+      if (a.isUser !== b.isUser) return a.isUser ? -1 : 1;
+      return String(a.name).localeCompare(String(b.name), "ja");
+    });
+    return list;
+  }
+
+  /**
+   * 入力欄に、候補を出す仕組みを付ける。
+   * @param id      入力欄のID
+   * @param onPick  選ばれたときに呼ぶ（人物IDを渡す。消したときは空文字）
+   */
+  function setupCombo(id, onPick) {
+    const input = $(id);
+    const list = $(id + "-list");
+    const openBtn = $(id + "-open");
+    if (!input || !list) return;
+
+    let composing = false;   // 日本語を変換している最中か
+    let active = -1;         // キーボードで選んでいる位置
+    let shown = [];
+
+    function close() {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      active = -1;
+    }
+
+    function open(query) {
+      shown = candidates(query).slice(0, 30);
+      if (!shown.length) {
+        list.innerHTML = '<span class="combo-empty">見つかりません</span>';
+      } else {
+        list.innerHTML = shown.map(function (n, i) {
+          return '<span class="combo-item' + (i === active ? " is-active" : "") + '"'
+            + ' data-pick="' + n.id + '" data-i="' + i + '">'
+            + '<span class="ci-name">' + esc(n.name) + "</span>"
+            + (n.kana ? '<span class="ci-kana">' + esc(n.kana) + "</span>" : "")
+            + '<span class="ci-org">' + esc(n.isUser ? "社内" : (n.org || "")) + "</span>"
+            + "</span>";
+        }).join("");
+      }
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+    }
+
+    function pick(id2) {
+      const n = nodeById(id2);
+      input.value = n ? n.name : "";
+      close();
+      onPick(id2);
+    }
+
+    input.addEventListener("compositionstart", function () { composing = true; });
+    input.addEventListener("compositionend", function () {
+      composing = false;
+      open(input.value);
+    });
+    input.addEventListener("input", function () {
+      if (composing) return;          // 変換の途中では絞り込まない
+      active = -1;
+      open(input.value);
+      if (!input.value.trim()) onPick("");   // 空にしたら選択も外す
+    });
+    input.addEventListener("focus", function () { open(input.value); });
+    input.addEventListener("blur", function () {
+      // 候補を押す前に閉じてしまわないよう、少し待つ
+      setTimeout(close, 150);
+    });
+
+    input.addEventListener("keydown", function (e) {
+      if (composing) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (list.hidden) { open(input.value); return; }
+        active += (e.key === "ArrowDown" ? 1 : -1);
+        if (active < 0) active = shown.length - 1;
+        if (active >= shown.length) active = 0;
+        open(input.value);
+        const el = list.querySelector(".is-active");
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (!list.hidden && shown.length) pick(shown[active >= 0 ? active : 0].id);
+      } else if (e.key === "Escape") {
+        close();
+      }
+    });
+
+    openBtn.addEventListener("mousedown", function (e) {
+      e.preventDefault();
+      if (list.hidden) { input.focus(); open(""); } else { close(); }
+    });
+
+    list.addEventListener("mousedown", function (e) {
+      const item = e.target.closest("[data-pick]");
+      if (!item) return;
+      e.preventDefault();
+      pick(item.dataset.pick);
+    });
+  }
+
   function renderControls() {
     const persons = state.nodes.filter((n) => !n.isUser);
     const me = Storage.getCurrentUser();
@@ -487,9 +631,13 @@ const Graph = (function () {
       + '<div class="grow">'
       +   '<div class="glabel">経路をさがす</div>'
       +   '<div class="gitems">'
-      +     '<select id="g-from" class="select select-wide">' + personOptions(state.pathFrom) + "</select>"
+      +     (me
+            ? '<button class="btn btn-sm" id="g-me" title="'
+              + esc(me.name) + 'さんを出発点にします">自分から</button>'
+            : "")
+      +     comboHtml("g-from", state.pathFrom, "出発する人")
       +     '<span class="garrow">→</span>'
-      +     '<select id="g-to" class="select select-wide">' + personOptions(state.pathTo) + "</select>"
+      +     comboHtml("g-to", state.pathTo, "たどり着きたい人")
       +     '<button class="btn btn-sm" id="g-clear">解除</button>'
       +   "</div>"
       + "</div>"
@@ -557,17 +705,39 @@ const Graph = (function () {
     $("g-zoom-in").addEventListener("click", function () { zoomBy(1.25); });
     $("g-zoom-out").addEventListener("click", function () { zoomBy(1 / 1.25); });
     $("g-zoom-reset").addEventListener("click", resetView);
-    $("g-from").addEventListener("change", function () {
-      state.pathFrom = this.value; applyPath(); render();
+    // 「自分から」で、いま使っている人をすぐ出発点にする
+    const meBtn = $("g-me");
+    if (meBtn) meBtn.addEventListener("click", function () {
+      const u = Storage.getCurrentUser();
+      if (!u) return;
+      state.pathFrom = "U:" + u.id;
+      $("g-from").value = u.name;
+      applyPath();
+      redrawAfterPath();
+      // 続けて行き先を打てるように、そちらへ移す
+      const to = $("g-to");
+      if (to && to.focus) to.focus();
     });
-    $("g-to").addEventListener("change", function () {
-      state.pathTo = this.value; applyPath(); render();
+
+    setupCombo("g-from", function (id) {
+      state.pathFrom = id; applyPath(); redrawAfterPath();
+    });
+    setupCombo("g-to", function (id) {
+      state.pathTo = id; applyPath(); redrawAfterPath();
     });
     $("g-clear").addEventListener("click", function () {
       state.pathFrom = ""; state.pathTo = "";
       state.pathIds = []; state.pathLinks = []; state.message = "";
-      render();
+      $("g-from").value = ""; $("g-to").value = "";
+      redrawAfterPath();
     });
+  }
+
+  /* 経路を選んだあとの描き直し。
+     入力欄そのものは作り直さない（打ち込んだ内容や、開いている候補が消えるため） */
+  function redrawAfterPath() {
+    renderCanvas();
+    renderPanel();
   }
 
   function renderCanvas() {
@@ -776,12 +946,28 @@ const Graph = (function () {
       };
     }
 
-    // マウスホイールで拡大・縮小
+    /* マウスホイールと、タッチパッドの二本指で拡大・縮小。
+
+       以前は「1回動かすたびに一定量」拡大していたため、
+       小刻みに何度も知らせてくるタッチパッドでは効きすぎていた。
+       動かした量に応じて変えることで、どちらでも同じ感覚になる。 */
     svgEl.addEventListener("wheel", function (e) {
       e.preventDefault();
+
+      // 知らせ方が「行」「ページ」単位のこともあるので、点の単位にそろえる
+      let dy = e.deltaY;
+      if (e.deltaMode === 1) dy *= 16;
+      else if (e.deltaMode === 2) dy *= 400;
+
+      // つまむ操作（二本指でのピンチ）は、拡大の意図がはっきりしているので少し強めに
+      const sensitivity = e.ctrlKey ? 0.008 : 0.0015;
+
+      // 一度に飛びすぎないよう、上下を抑える
+      let factor = Math.exp(-dy * sensitivity);
+      factor = Math.max(0.84, Math.min(1.2, factor));
+
       const p = toSvgPoint(e);
-      // 下に回すと縮小、上に回すと拡大
-      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y);
+      zoomBy(factor, p.x, p.y);
     }, { passive: false });
 
     svgEl.addEventListener("pointerdown", function (e) {
@@ -955,8 +1141,10 @@ const Graph = (function () {
     const from = $("gp-from");
     if (from) from.addEventListener("click", function () {
       state.pathFrom = p.id;
+      const box = $("g-from");
+      if (box) box.value = p.name;
       applyPath();
-      render();
+      redrawAfterPath();
     });
   }
 
