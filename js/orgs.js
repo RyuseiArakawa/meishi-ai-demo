@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 16;
+(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 17;
 
 /* =============================================================================
    組織（Phase 6）
@@ -21,6 +21,12 @@ const Orgs = (function () {
 
   let selected = "";
 
+  /* 画面が狭いかどうか。
+     狭いときは一覧と詳細を並べられないので、
+     組織を選んだら詳細だけの画面に切り替える。
+     並べて出していると、下に出た詳細に気づけないため。 */
+  const isNarrow = () => window.matchMedia("(max-width: 900px)").matches;
+
   function enter(orgId) {
     if (orgId !== undefined) selected = orgId;
     render();
@@ -28,6 +34,10 @@ const Orgs = (function () {
 
   function render() {
     const list = Storage.getOrganizations();
+    const detailOnly = isNarrow() && Boolean(selected);
+
+    // 狭い画面で組織を選んでいる間は、一覧を隠す
+    $("orgs-layout").className = "orgs-layout" + (detailOnly ? " is-detail" : "");
 
     $("orgs-count").textContent = list.length
       ? list.length + " 組織・" + Storage.getPersons().length + " 名"
@@ -63,6 +73,8 @@ const Orgs = (function () {
     if (!d) return placeholderHtml();
 
     return '<div class="odetail">'
+      // 狭い画面のときだけ見える戻り口
+      + '<button class="orgs-back" id="orgs-back">← 組織一覧へもどる</button>'
       + '<h2 class="odetail-name">' + esc(d.org.name) + "</h2>"
       + '<div class="odetail-meta">'
       +   esc([d.org.industry, d.org.address].filter(Boolean).join("　／　") || "")
@@ -115,16 +127,29 @@ const Orgs = (function () {
   }
 
   function wire() {
+    const back = $("orgs-back");
+    if (back) back.addEventListener("click", function () {
+      selected = "";
+      render();
+      window.scrollTo(0, 0);
+    });
+
     ["orgs-list", "orgs-detail"].forEach(function (id) {
       $(id).querySelectorAll("[data-org]").forEach(function (b) {
         b.addEventListener("click", function (e) {
           e.stopPropagation();
           selected = b.dataset.org;
           render();
+          if (isNarrow()) window.scrollTo(0, 0);
         });
       });
     });
   }
+
+  // 画面の向きを変えたときに、並べ方が合わなくなるので描き直す
+  window.addEventListener("resize", function () {
+    if (!$("screen-orgs").hidden) render();
+  });
 
   return { enter: enter };
 })();
