@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 17;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -149,15 +149,20 @@
 
     const max = Math.max.apply(null, d.perUser.map((u) => u.contacts).concat([1]));
 
+    // いちばん多くを1人で抱えている人（具体的に何が失われるかを示すため）
+    const top = d.perUser.slice().sort((x, y) => y.only - x.only)[0];
+
     $("dep-body").innerHTML =
         '<div class="dep-lead">'
-      +   "外部の <b>" + d.withContact + "</b> 名のうち、"
-      +   "社内で接点があるのが1人だけなのは <b>" + d.sole + "</b> 名"
-      +   "（<b>" + d.solePct + "%</b>）です。"
+      +   "名刺を交換した相手 " + d.withContact + " 名のうち、"
+      +   "<b>" + d.sole + " 名（" + d.solePct + "%）</b>は、"
+      +   "社内でつながっているのが <b>1 人だけ</b> です。"
       + "</div>"
-      + '<p class="note" style="margin:4px 0 14px">'
-      +   "その1人が異動や退職で抜けると、つながりが途切れます。"
+      + '<p class="note" style="margin:6px 0 16px">'
+      +   "その1人が異動や退職で抜けると、そのつながりは組織から失われます。"
+      +   "名刺は残っても、「誰に頼めば話が通るか」が分からなくなります。"
       + "</p>"
+
       + '<div class="dep-bars">'
       +   d.perUser.map(function (u) {
             const w = Math.round((u.contacts / max) * 100);
@@ -166,14 +171,26 @@
               + '<div class="dep-name">' + esc(u.user.name) + "</div>"
               + '<div class="dep-bar"><span class="dep-fill" style="width:' + w + '%"></span>'
               +   '<span class="dep-only" style="width:' + soleW + '%"></span></div>'
-              + '<div class="dep-num">' + u.contacts + " 名"
-              +   (u.only ? '<span class="dep-warn">うち ' + u.only + " 名はこの人だけ</span>" : "")
+              + '<div class="dep-num">' + u.contacts + " 名と名刺交換"
+              +   (u.only
+                  ? '<span class="dep-warn">うち ' + u.only + " 名は、この人しかつながっていません</span>"
+                  : '<span class="dep-ok">すべて、ほかの人ともつながっています</span>')
               + "</div></div>";
           }).join("")
       + "</div>"
-      + '<p class="note" style="margin-top:10px">'
-      +   "濃い部分が「その人しか接点を持っていない相手」です。"
-      +   (d.none ? "　接点が記録されていない人物が " + d.none + " 名います。" : "")
+
+      + (top && top.only
+        ? '<div class="dep-note">'
+          + "たとえば <b>" + esc(top.user.name) + "</b> さんが抜けると、"
+          + "<b>" + top.only + " 名</b> とのつながりが組織から失われます。"
+          + "</div>"
+        : "")
+
+      + '<p class="note" style="margin-top:12px">'
+      +   "棒の長さは名刺を交換した人数、朱色の部分は「社内でその人しかつながっていない相手」です。"
+      +   (d.none
+          ? "　なお、名刺を登録した人が分からない人物が " + d.none + " 名います。"
+          : "")
       + "</p>";
   }
 
@@ -586,13 +603,24 @@
 
   function renderUserBar() {
     const me = Storage.getCurrentUser();
+    const signedIn = window.Auth && Auth.isRequired();
+
+    // ログインしている場合は、自分で選び直すことはできません
     $("userbar").innerHTML = me
       ? '<div class="ub-name">' + esc(me.name) + "</div>"
-        + '<button class="linkbtn" id="ub-switch">切り替える</button>'
-      : '<button class="btn btn-sm" id="ub-pick">利用者を選ぶ</button>';
+        + (signedIn
+          ? '<button class="linkbtn" id="ub-signout">ログアウト</button>'
+          : '<button class="linkbtn" id="ub-switch">切り替える</button>')
+      : (signedIn
+        ? '<div class="ub-name">―</div>'
+        : '<button class="btn btn-sm" id="ub-pick">利用者を選ぶ</button>');
 
     const sw = $("ub-switch"); if (sw) sw.addEventListener("click", openUserPicker);
     const pk = $("ub-pick");   if (pk) pk.addEventListener("click", openUserPicker);
+    const so = $("ub-signout");
+    if (so) so.addEventListener("click", function () {
+      if (confirm("ログアウトします。よろしいですか。")) Auth.signOut();
+    });
   }
 
   function openUserPicker() {
@@ -738,6 +766,23 @@
     if (r.ok && r.multi === false) {
       el.className = "conn conn-warn";
       el.textContent = "▲ Worker が古い版です。worker.js を貼り直してください。";
+    }
+
+    /* --- ログイン ---
+       Worker に GOOGLE_CLIENT_ID を登録している場合だけ、ここで止まります。
+       登録していなければ、これまでどおり素通りします。 */
+    if (r.ok && r.authRequired) {
+      const me = await Auth.start(r);
+      if (me) {
+        const u = Storage.ensureUserByEmail(me.email, me.name);
+        if (u.ok) Storage.setCurrentUser(u.id);
+      }
+      if (r.authOpen) {
+        const w = $("storage-warning");
+        w.hidden = false;
+        w.textContent = "ログインは必要ですが、利用できる人が限定されていません。"
+          + "Cloudflare に ALLOWED_DOMAINS（例：jaist.ac.jp）を登録してください。";
+      }
     }
 
     if (!r.ok || !r.sharedDb) {

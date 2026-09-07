@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=19">
+<link rel="stylesheet" href="css/style.css?v=21">
 </head>
 <body>
 
@@ -112,7 +112,7 @@
     </div>
 
     <section class="block" id="dep-block">
-      <h3>外部との接点の偏り</h3>
+      <h3>つながりの偏り ― この人脈は、誰に支えられているか</h3>
       <div id="dep-body"></div>
     </section>
 
@@ -310,6 +310,21 @@
 
 </main>
 
+<!-- ログイン画面。ログインが必要な設定のときだけ出ます。 -->
+<div class="login-screen" id="login-screen" hidden>
+  <div class="login-box">
+    <div class="login-mark">OK</div>
+    <h1>Organization Knowledge</h1>
+    <p class="login-sub">組織内人脈・知識グラフ</p>
+    <div id="login-message"></div>
+    <p class="note">組織のGoogleアカウントでログインしてください。</p>
+    <div id="login-button" class="login-button"></div>
+    <p class="note login-foot">
+      名刺には個人情報が含まれます。許可された方だけが利用できます。
+    </p>
+  </div>
+</div>
+
 <!-- AIチャット -->
 <button class="chat-fab" id="chat-fab" aria-label="AIチャットを開く" title="AIチャット">
   <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
@@ -347,17 +362,18 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=19"></script>
-<script src="js/remote.js?v=19"></script>
-<script src="js/storage.js?v=19"></script>
-<script src="js/gemini.js?v=19"></script>
-<script src="js/pdf.js?v=19"></script>
-<script src="js/app.js?v=19"></script>
-<script src="js/people.js?v=19"></script>
-<script src="js/graph.js?v=19"></script>
-<script src="js/orgs.js?v=19"></script>
-<script src="js/maintain.js?v=19"></script>
-<script src="js/ai-chat.js?v=19"></script>
+<script src="js/config.js?v=21"></script>
+<script src="js/remote.js?v=21"></script>
+<script src="js/storage.js?v=21"></script>
+<script src="js/gemini.js?v=21"></script>
+<script src="js/pdf.js?v=21"></script>
+<script src="js/app.js?v=21"></script>
+<script src="js/auth.js?v=21"></script>
+<script src="js/people.js?v=21"></script>
+<script src="js/graph.js?v=21"></script>
+<script src="js/orgs.js?v=21"></script>
+<script src="js/maintain.js?v=21"></script>
+<script src="js/ai-chat.js?v=21"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -366,10 +382,11 @@
      中身を直したファイルだけ番号が上がるので、
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
-    "config":   14,
-    "gemini":   14,
-    "storage":  15,
-    "app":      15,
+    "auth":     16,
+    "remote":   16,
+    "storage":  16,
+    "gemini":   16,
+    "app":      17,
     "graph":    13,
     "ai-chat":  14,
     "orgs":     15,
