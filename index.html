@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=25">
+<link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body>
 
@@ -123,18 +123,17 @@
 
     <section class="block" id="shared-tools" hidden>
       <h3>組織での共有</h3>
-      <p class="note">保存先はスプレッドシートです。他の人の登録を取り込むには、更新してください。</p>
+      <p class="note lines"><span>保存先はスプレッドシートです。</span><span>他の人の登録を取り込むには、更新してください。</span></p>
       <div class="btn-row">
         <button class="btn" id="btn-reload">最新の状態に更新</button>
         <button class="btn" id="btn-pushall">手元のデータをすべて送る</button>
       </div>
-      <p class="note">「JSONを読み込む」で入れたデータは手元にしか入りません。
-        組織で共有するには「手元のデータをすべて送る」を押してください。</p>
+      <p class="note lines"><span>「JSONを読み込む」で入れたデータは、手元にしか入りません。</span><span>組織で共有するには「手元のデータをすべて送る」を押してください。</span></p>
     </section>
 
     <section class="block">
       <h3>データの管理</h3>
-      <p class="note">保存先はこのブラウザの中だけです。他の端末とは共有されません。発表前にバックアップを取ってください。</p>
+      <p class="note lines"><span>保存先は、このブラウザの中だけです。他の端末とは共有されません。</span><span>発表前にバックアップを取ってください。</span></p>
       <div class="btn-row">
         <button class="btn" id="btn-export">JSONで書き出す</button>
         <button class="btn" id="btn-import">JSONを読み込む</button>
@@ -191,10 +190,10 @@
       </div>
     </div>
 
-    <p class="note" id="capture-note">
-      画像は縮小してから送信します。PDFは1ページずつ画像に変換します。
-      1回に処理できるのは60ページまでです。
-      これはデモです。実在する方の名刺は使用しないでください。
+    <p class="note lines" id="capture-note">
+      <span>画像は縮小してから送信します。PDFは1ページずつ画像に変換します。</span>
+      <span>1回に処理できるのは60ページまでです。</span>
+      <span>これはデモです。実在する方の名刺は使用しないでください。</span>
     </p>
   </section>
 
@@ -324,8 +323,9 @@
     <div id="login-message"></div>
     <p class="note">組織のGoogleアカウントでログインしてください。</p>
     <div id="login-button" class="login-button"></div>
-    <p class="note login-foot">
-      名刺には個人情報が含まれます。許可された方だけが利用できます。
+    <p class="note login-foot lines">
+      <span>名刺には個人情報が含まれます。</span>
+      <span>許可された方だけが利用できます。</span>
     </p>
   </div>
 </div>
@@ -367,17 +367,17 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=25"></script>
-<script src="js/remote.js?v=25"></script>
-<script src="js/storage.js?v=25"></script>
-<script src="js/gemini.js?v=25"></script>
-<script src="js/pdf.js?v=25"></script>
-<script src="js/app.js?v=25"></script>
-<script src="js/people.js?v=25"></script>
-<script src="js/graph.js?v=25"></script>
-<script src="js/orgs.js?v=25"></script>
-<script src="js/maintain.js?v=25"></script>
-<script src="js/ai-chat.js?v=25"></script>
+<script src="js/config.js?v=27"></script>
+<script src="js/remote.js?v=27"></script>
+<script src="js/storage.js?v=27"></script>
+<script src="js/gemini.js?v=27"></script>
+<script src="js/pdf.js?v=27"></script>
+<script src="js/app.js?v=27"></script>
+<script src="js/people.js?v=27"></script>
+<script src="js/graph.js?v=27"></script>
+<script src="js/orgs.js?v=27"></script>
+<script src="js/maintain.js?v=27"></script>
+<script src="js/ai-chat.js?v=27"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -387,12 +387,13 @@
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
     "config":   14,
+    "people":   12,
     "storage":  15,
     "gemini":   14,
-    "app":      18,
-    "graph":    13,
-    "ai-chat":  14,
-    "orgs":     15,
+    "app":      19,
+    "graph":    14,
+    "ai-chat":  15,
+    "orgs":     16,
     "maintain": 16
   };
 

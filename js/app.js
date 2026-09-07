@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 18;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 19;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -630,8 +630,10 @@
 
     $("user-dialog-body").innerHTML =
         "<h2>あなたは誰ですか</h2>"
-      + '<p class="note">名刺を登録した人を記録します。'
-      + "人脈グラフで「この人と接点があるのは社内の誰か」を出すために使います。</p>"
+      + '<p class="note lines">'
+      +   "<span>名刺を登録した人を記録します。</span>"
+      +   "<span>人脈グラフで「この人と接点があるのは社内の誰か」を出すために使います。</span>"
+      + "</p>"
       + (users.length
         ? '<div class="user-list">' + users.map((u) =>
             '<button class="user-pick' + (u.id === me ? " is-me" : "") + '" data-user="'
@@ -647,9 +649,10 @@
       +     '<button class="btn btn-sm" id="btn-add-user">登録して選ぶ</button>'
       +   "</div>"
       + "</div>"
-      + '<p class="note" style="margin-top:14px">'
-      +   "これは認証ではありません。誰として使うかを自分で選ぶ仕組みです。"
-      +   "実際の運用では、ログインの仕組みが必要です。</p>"
+      + '<p class="note lines" style="margin-top:14px">'
+      +   "<span>これは認証ではありません。誰として使うかを自分で選ぶ仕組みです。</span>"
+      +   "<span>実際の運用では、ログインの仕組みが必要です。</span>"
+      + "</p>"
       + '<div class="btn-row"><button class="btn btn-sm" id="btn-close-user">閉じる</button></div>';
 
     $("user-dialog").hidden = false;

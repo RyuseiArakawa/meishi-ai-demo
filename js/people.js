@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["people"] = 12;
+
 /* =============================================================================
    人物の画面（Phase 2）
 
@@ -269,9 +272,9 @@ const People = (function () {
       + '<div class="btn-row" style="margin-top:6px">'
       +   '<button class="btn btn-sm" id="btn-add-rel">関係を登録する</button>'
       + "</div>"
-      + '<p class="note" style="margin-top:8px">'
-      +   "強さと根拠は必ず入力してください。"
-      +   "この2つが無いと、Phase 5 のAI検索で「なぜこの人を挙げたか」を示せなくなります。"
+      + '<p class="note lines" style="margin-top:8px">'
+      +   "<span>強さと根拠は、必ず入力してください。</span>"
+      +   "<span>この2つが無いと、AIチャットで「なぜこの人を挙げたか」を示せなくなります。</span>"
       + "</p>"
       + "</div>";
   }
@@ -352,9 +355,10 @@ const People = (function () {
       /* ---- 専門分野 ---- */
       + '<section class="block">'
       +   "<h3>専門・技術</h3>"
-      +   '<p class="note" style="margin:-6px 0 12px">'
-      +     "名刺には書かれていない情報です。会って話した内容や、論文などで確認したことを入力してください。"
-      +     "AIには推測させません。"
+      +   '<p class="note lines" style="margin:-6px 0 12px">'
+      +     "<span>名刺には書かれていない情報です。</span>"
+      +     "<span>会って話した内容や、論文などで確認したことを入力してください。</span>"
+      +     "<span>AIには推測させません。</span>"
       +   "</p>"
       +   (topics.length
           ? '<div class="chips chips-lg">' + topics.map((t) =>
@@ -376,10 +380,10 @@ const People = (function () {
       /* ---- 人物同士の関係（Phase 3） ---- */
       + '<section class="block">'
       +   "<h3>人物同士の関係</h3>"
-      +   '<p class="note" style="margin:-6px 0 12px">'
-      +     "実際にあったつながりだけを登録します。"
-      +     "同じ組織にいることや同じ学会に出たことから、システムが関係を作ることはありません。"
-      +     "強さと根拠も、人が入力します。"
+      +   '<p class="note lines" style="margin:-6px 0 12px">'
+      +     "<span>実際にあったつながりだけを登録します。</span>"
+      +     "<span>同じ組織にいることや同じ学会に出たことから、システムが関係を作ることはありません。</span>"
+      +     "<span>強さと根拠も、人が入力します。</span>"
       +   "</p>"
       +   relationsHtml(p, rels)
       +   relationFormHtml(p)
@@ -412,8 +416,9 @@ const People = (function () {
       + (mates.length
         ? '<section class="block">'
           + "<h3>同じ組織に登録されている人物</h3>"
-          + '<p class="note" style="margin:-6px 0 12px">'
-          +   "同じ組織に所属しているという事実だけを示しています。関係の有無は Phase 3 で記録します。"
+          + '<p class="note lines" style="margin:-6px 0 12px">'
+          +   "<span>同じ組織に所属している、という事実だけを示しています。</span>"
+          +   "<span>実際につながりがあるかどうかは、上の「人物同士の関係」で登録してください。</span>"
           + "</p>"
           + '<div class="mates">' + mates.map((m) =>
               '<button class="mate" data-screen="person" data-id="' + m.id + '">'
@@ -427,8 +432,10 @@ const People = (function () {
       /* ---- 削除 ---- */
       + '<section class="block">'
       +   "<h3>この人物の削除</h3>"
-      +   '<p class="note" style="margin:-6px 0 10px">'
-      +     "名刺画像・専門分野・交流の記録もあわせて消えます。取り消せません。</p>"
+      +   '<p class="note lines" style="margin:-6px 0 10px">'
+      +     "<span>名刺画像・専門分野・交流の記録も、あわせて消えます。</span>"
+      +     "<span>取り消せません。</span>"
+      +   "</p>"
       +   '<button class="btn btn-danger btn-sm" id="btn-del-person">削除する</button>'
       + "</section>";
 

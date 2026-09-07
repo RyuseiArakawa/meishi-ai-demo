@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 14;
+(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 15;
 
 /* =============================================================================
    AIチャット（Phase 5）
@@ -114,8 +114,10 @@ const AIChat = (function () {
       ? messages.map(bubbleHtml).join("")
       : '<div class="chat-intro">'
         + '<div class="chat-intro-title">登録されている人について質問できます</div>'
-        + '<p class="note">回答は、このシステムに登録されている情報だけをもとに作られます。'
-        + "登録されていないことは答えられません。</p>"
+        + '<p class="note lines">'
+        +   "<span>回答は、このシステムに登録されている情報だけをもとに作られます。</span>"
+        +   "<span>登録されていないことは答えられません。</span>"
+        + "</p>"
         + '<div class="chat-examples">'
         +   EXAMPLES.map((q, i) => '<button class="chat-ex" data-ex="' + i + '">'
               + esc(q) + "</button>").join("")

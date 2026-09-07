@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 13;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 14;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -822,8 +822,10 @@ const Graph = (function () {
 
     if (!state.selected) {
       box.innerHTML = head + legendHtml()
-        + '<p class="note">丸を押すと、その人物の関係を表示します。'
-        + "引きずると位置を動かせます。</p>";
+        + '<p class="note lines">'
+        +   "<span>丸を押すと、その人物の関係を表示します。</span>"
+        +   "<span>引きずると位置を動かせます。</span>"
+        + "</p>";
       return;
     }
 
@@ -933,9 +935,10 @@ const Graph = (function () {
       + '<div class="lg-row"><span class="lg-line lg-owner"></span>名刺交換（登録記録）</div>'
       + '<div class="lg-row"><span class="lg-line lg-thin"></span>強さ1〜2（点線）</div>'
       + '<div class="lg-row"><span class="lg-line lg-thick"></span>強さ3〜5（実線・太いほど強い）</div>'
-      + '<p class="note" style="margin:6px 0 10px">'
-      +   "線の太さは、人が登録した「関係の強さ」です。"
-      +   "システムが親しさを判定したものではありません。</p>"
+      + '<p class="note lines" style="margin:6px 0 10px">'
+      +   "<span>線の太さは、人が登録した「関係の強さ」です。</span>"
+      +   "<span>システムが親しさを判定したものではありません。</span>"
+      + "</p>"
       + '<div class="lg-orgs">' + orgs.map((o) =>
           '<div class="lg-row"><span class="lg-dot" style="background:'
           + ORG_COLORS[o.i % ORG_COLORS.length] + '"></span>' + esc(o.name) + "</div>").join("")

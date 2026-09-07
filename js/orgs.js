@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 16;
 
 /* =============================================================================
    組織（Phase 6）
@@ -102,9 +102,10 @@ const Orgs = (function () {
 
       /* つながっている組織 */
       + "<h3>つながっている組織</h3>"
-      + '<p class="note" style="margin:-6px 0 10px">'
-      +   "所属している人どうしの関係から数えたものです。"
-      +   "組織どうしの提携を登録しているわけではありません。</p>"
+      + '<p class="note lines" style="margin:-6px 0 10px">'
+      +   "<span>所属している人どうしの関係から数えたものです。</span>"
+      +   "<span>組織どうしの提携を登録しているわけではありません。</span>"
+      + "</p>"
       + (d.linked.length
         ? '<div class="olinks">' + d.linked.map((l) =>
             '<button class="olink" data-org="' + l.id + '">' + esc(l.name)
