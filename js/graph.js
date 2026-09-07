@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 16;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -49,6 +49,7 @@ const Graph = (function () {
     scope: "all",     // "all"=全員 / "mine"=選択中の利用者が交換した名刺だけ
     markSole: true,   // 組織内で1人しか接点がない人を強調するか
     spacing: 1,       // ノードの間隔（0.7=せまい / 1=ふつう / 1.4=ひろい）
+    spacingTouched: false,   // 利用者が自分でつまみを動かしたか
   };
 
   // 図を描く場所の広さ。間隔を広げると、この範囲も広がる。
@@ -174,6 +175,18 @@ const Graph = (function () {
       if (nb) nb.degree++;
     });
 
+    // 人数が多いほど、名前が重なりやすくなる。
+    // 自分でつまみを動かしていない間は、人数に合わせた間隔を選ぶ。
+    if (!state.spacingTouched) {
+      const n = state.nodes.length;
+      const auto = Math.max(1, Math.min(2.4, Math.sqrt(n / 34)));
+      if (Math.abs(auto - state.spacing) > 0.01) {
+        const ratio = auto / state.spacing;
+        state.nodes.forEach(function (nd) { nd.x *= ratio; nd.y *= ratio; });
+        state.spacing = auto;
+      }
+    }
+
     simulate();
   }
 
@@ -244,7 +257,7 @@ const Graph = (function () {
     }
 
     // 最後に、名前が重ならないように整える
-    separateLabels(pinned ? 2 : 30);
+    separateLabels(pinned ? 2 : (state.nodes.length > 60 ? 70 : 30));
   }
 
   /* -------------------------------------------------------------------------
@@ -515,6 +528,7 @@ const Graph = (function () {
     }
 
     spacingInput.addEventListener("input", function () {
+      state.spacingTouched = true;
       applySpacing(Number(this.value), true);
     });
     spacingInput.addEventListener("change", function () {
