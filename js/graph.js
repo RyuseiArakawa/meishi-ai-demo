@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 14;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 15;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -396,65 +396,91 @@ const Graph = (function () {
     renderPanel();
   }
 
+  /* -------------------------------------------------------------------------
+     操作欄
+
+     設定が多いので、4つの行に分けています。
+     行の頭に「何の設定か」を書き、右にその設定だけを並べます。
+     以前は横一列に並べていたため、画面幅によって折り返す位置が変わり、
+     どれとどれが同じ設定なのか分からなくなっていました。
+     ------------------------------------------------------------------------- */
+
   function renderControls() {
-    const persons = state.nodes;
-    const options = (selected) =>
+    const persons = state.nodes.filter((n) => !n.isUser);
+    const me = Storage.getCurrentUser();
+
+    const personOptions = (selected) =>
       '<option value="">選んでください</option>'
-      + persons.map((n) =>
+      + state.nodes.map((n) =>
           '<option value="' + n.id + '"' + (selected === n.id ? " selected" : "") + ">"
-          + esc(n.name) + (n.org ? "（" + esc(n.org) + "）" : "") + "</option>").join("");
+          + esc(n.name) + (n.isUser ? "（社内）" : (n.org ? "（" + esc(n.org) + "）" : ""))
+          + "</option>").join("");
 
     $("graph-controls").innerHTML =
-        '<div class="gctl">'
-      +   '<label for="g-strength">表示する関係</label>'
-      +   '<select id="g-strength" class="select">'
-      +     [1, 2, 3, 4, 5].map((v) =>
-            '<option value="' + v + '"' + (state.minStrength === v ? " selected" : "") + ">"
-            + (v === 1 ? "すべて" : "強さ " + v + " 以上") + "</option>").join("")
-      +   "</select>"
+        '<div class="gpanel">'
+
+      /* --- 1行目：どの範囲を出すか --- */
+      + '<div class="grow">'
+      +   '<div class="glabel">絞り込み</div>'
+      +   '<div class="gitems">'
+      +     '<span class="gfield"><label for="g-scope">範囲</label>'
+      +       '<select id="g-scope" class="select">'
+      +         '<option value="all"' + (state.scope === "all" ? " selected" : "") + ">組織全体</option>"
+      +         '<option value="mine"' + (state.scope === "mine" ? " selected" : "") + ">"
+      +           (me ? esc(me.name) + "さんの名刺だけ" : "自分の名刺だけ（利用者未選択）")
+      +         "</option>"
+      +       "</select></span>"
+      +     '<span class="gfield"><label for="g-strength">関係の強さ</label>'
+      +       '<select id="g-strength" class="select">'
+      +         [1, 2, 3, 4, 5].map((v) =>
+                  '<option value="' + v + '"' + (state.minStrength === v ? " selected" : "") + ">"
+                  + (v === 1 ? "すべて" : v + " 以上") + "</option>").join("")
+      +       "</select></span>"
+      +   "</div>"
       + "</div>"
-      + '<div class="gctl">'
-      +   '<label><input type="checkbox" id="g-isolated"'
-      +     (state.showIsolated ? " checked" : "") + "> 関係のない人物も表示</label>"
+
+      /* --- 2行目：何を出すか --- */
+      + '<div class="grow">'
+      +   '<div class="glabel">表示する</div>'
+      +   '<div class="gitems">'
+      +     '<label class="gcheck"><input type="checkbox" id="g-users"'
+      +       (state.showUsers ? " checked" : "") + "> 社内の利用者</label>"
+      +     '<label class="gcheck"><input type="checkbox" id="g-isolated"'
+      +       (state.showIsolated ? " checked" : "") + "> 関係のない人物</label>"
+      +     '<label class="gcheck"><input type="checkbox" id="g-sole"'
+      +       (state.markSole ? " checked" : "") + "> 接点が1人だけの人を強調</label>"
+      +   "</div>"
       + "</div>"
-      + '<div class="gctl">'
-      +   '<label for="g-scope">表示</label>'
-      +   '<select id="g-scope" class="select select-sm">'
-      +     '<option value="all"' + (state.scope === "all" ? " selected" : "") + ">組織全体</option>"
-      +     '<option value="mine"' + (state.scope === "mine" ? " selected" : "") + ">"
-      +       (Storage.getCurrentUser()
-              ? esc(Storage.getCurrentUser().name) + "さんの名刺だけ"
-              : "自分の名刺だけ（利用者未選択）") + "</option>"
-      +   "</select>"
+
+      /* --- 3行目：見え方 --- */
+      + '<div class="grow">'
+      +   '<div class="glabel">見え方</div>'
+      +   '<div class="gitems">'
+      +     '<span class="gfield"><label for="g-spacing">間隔</label>'
+      +       '<input type="range" id="g-spacing" min="0.6" max="3" step="0.05"'
+      +         ' value="' + state.spacing + '">'
+      +       '<span class="gvalue" id="g-spacing-level">'
+              + Math.round(state.spacing * 100) + "%</span></span>"
+      +     '<span class="gfield"><span class="glabel-sub">拡大</span>'
+      +       '<button class="zbtn" id="g-zoom-out" aria-label="縮小">−</button>'
+      +       '<span class="gvalue" id="g-zoom-level">100%</span>'
+      +       '<button class="zbtn" id="g-zoom-in" aria-label="拡大">＋</button>'
+      +       '<button class="btn btn-sm" id="g-zoom-reset">全体を表示</button></span>'
+      +     '<button class="btn btn-sm" id="g-untangle">名前の重なりをほどく</button>'
+      +   "</div>"
       + "</div>"
-      + '<div class="gctl">'
-      +   '<label><input type="checkbox" id="g-sole"'
-      +     (state.markSole ? " checked" : "") + "> 接点が1人だけの人を強調</label>"
+
+      /* --- 4行目：経路 --- */
+      + '<div class="grow">'
+      +   '<div class="glabel">経路をさがす</div>'
+      +   '<div class="gitems">'
+      +     '<select id="g-from" class="select select-wide">' + personOptions(state.pathFrom) + "</select>"
+      +     '<span class="garrow">→</span>'
+      +     '<select id="g-to" class="select select-wide">' + personOptions(state.pathTo) + "</select>"
+      +     '<button class="btn btn-sm" id="g-clear">解除</button>'
+      +   "</div>"
       + "</div>"
-      + '<div class="gctl gctl-spacing">'
-      +   '<label for="g-spacing">間隔</label>'
-      +   '<input type="range" id="g-spacing" min="0.6" max="3" step="0.05"'
-      +     ' value="' + state.spacing + '">'
-      +   '<span class="zlevel" id="g-spacing-level">'
-            + Math.round(state.spacing * 100) + "%</span>"
-      +   '<button class="btn btn-sm" id="g-untangle">名前の重なりをほどく</button>'
-      + "</div>"
-      + '<div class="gctl gctl-zoom">'
-      +   '<button class="zbtn" id="g-zoom-out" aria-label="縮小">−</button>'
-      +   '<span class="zlevel" id="g-zoom-level">100%</span>'
-      +   '<button class="zbtn" id="g-zoom-in" aria-label="拡大">＋</button>'
-      +   '<button class="btn btn-sm" id="g-zoom-reset">全体</button>'
-      + "</div>"
-      + '<div class="gctl">'
-      +   '<label><input type="checkbox" id="g-users"'
-      +     (state.showUsers ? " checked" : "") + "> 社内の利用者を表示</label>"
-      + "</div>"
-      + '<div class="gctl gctl-path">'
-      +   '<label for="g-from">経路をさがす</label>'
-      +   '<select id="g-from" class="select">' + options(state.pathFrom) + "</select>"
-      +   '<span class="gctl-arrow">→</span>'
-      +   '<select id="g-to" class="select">' + options(state.pathTo) + "</select>"
-      +   '<button class="btn btn-sm" id="g-clear">解除</button>'
+
       + "</div>";
 
     $("g-strength").addEventListener("change", function () {

@@ -548,16 +548,6 @@ input[type=text], input[type=date], input[type=search], select {
 
 /* ===== 人脈グラフ（Phase 4） ============================================= */
 
-.graph-controls { align-items: center; gap: 8px 14px; }
-.graph-controls .gctl > label { font-size: 12px; }
-.graph-controls .select { min-width: 0; }
-.graph-controls .select-sm { min-width: 96px; }
-.gctl { display: flex; align-items: center; gap: 8px; }
-.gctl > label { font-size: 12.5px; color: var(--ink2); white-space: nowrap; }
-.gctl input[type=checkbox] { accent-color: var(--ink); margin-right: 4px; }
-.gctl-path { gap: 6px; flex-wrap: wrap; }
-.gctl-path .select { min-width: 150px; }
-.gctl-arrow { color: var(--muted); }
 
 /* 図と右の説明を、画面の高さに収める。
    組織が増えると右の説明が長くなり、ページ全体が縦に伸びてしまうため、
@@ -911,10 +901,6 @@ input[type=text], input[type=date], input[type=search], select {
 /* グラフの拡大縮小・移動 */
 .graph-svg { cursor: grab; }
 .graph-svg.is-panning { cursor: grabbing; }
-.select-sm { min-width: 104px; }
-.gctl-spacing { gap: 8px; }
-.gctl-spacing input[type=range] { width: 130px; accent-color: var(--ink); cursor: pointer; }
-.gctl-zoom { gap: 4px; }
 .zbtn {
   appearance: none; width: 28px; height: 28px; flex: none;
   border: 1px solid var(--rule2); background: var(--paper);
@@ -922,9 +908,42 @@ input[type=text], input[type=date], input[type=search], select {
   font-size: 15px; line-height: 1; display: grid; place-items: center;
 }
 .zbtn:hover { background: #f0f3f5; border-color: var(--ink2); }
-.zlevel {
-  font-size: 12px; color: var(--ink2); min-width: 44px;
+/* ===== 人脈グラフの操作欄 ================================================
+   設定が多いので、行ごとに「何の設定か」を左に置いてそろえる。
+   横一列に並べると、画面幅によって折り返しが変わり、
+   どれが同じ設定なのか分からなくなるため。 */
+
+.gpanel {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 2px 16px; margin-bottom: 14px;
+}
+.grow {
+  display: grid; grid-template-columns: 92px 1fr; gap: 14px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--rule);
+}
+.grow:last-child { border-bottom: 0; }
+.glabel { font-size: 12px; color: var(--muted); }
+.gitems { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+
+.gfield { display: inline-flex; align-items: center; gap: 7px; }
+.gfield > label, .glabel-sub { font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.gcheck { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.gcheck input { accent-color: var(--ink); }
+
+.gpanel .select { min-width: 132px; }
+.gpanel .select-wide { min-width: 190px; }
+.gpanel input[type=range] { width: 120px; accent-color: var(--ink); cursor: pointer; }
+.garrow { color: var(--muted); }
+
+/* 数値は幅を固定して、変わってもボタンが動かないようにする */
+.gvalue {
+  font-size: 12px; color: var(--ink2); min-width: 46px;
   text-align: center; font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .grow { grid-template-columns: 1fr; gap: 4px; padding: 10px 0; }
+  .glabel { font-size: 11.5px; font-weight: 600; color: var(--ink2); }
 }
 
 /* 起動時のエラー表示。原因が分からないまま固まらないようにするためのもの。 */
