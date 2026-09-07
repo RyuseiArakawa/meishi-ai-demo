@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=29">
+<link rel="stylesheet" href="css/style.css?v=33">
 </head>
 <body>
 
@@ -83,8 +83,10 @@
       <div class="stat"><b id="stat-topics">0</b><span>専門分野</span></div>
       <div class="stat"><b id="stat-relations">0</b><span>関係</span></div>
       <div class="stat"><b id="stat-cards">0</b><span>名刺</span></div>
-      <div class="stat"><b id="stat-size">0.00<i>MB</i></b><span>使用容量／約5MB</span></div>
+      <div class="stat"><b id="stat-size">0.00<i>MB</i></b><span>この端末の使用量</span></div>
     </div>
+
+    <p class="note lines" id="size-note"></p>
 
     <div id="storage-warning" class="alert alert-warn" hidden></div>
 
@@ -367,17 +369,17 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=29"></script>
-<script src="js/remote.js?v=29"></script>
-<script src="js/storage.js?v=29"></script>
-<script src="js/gemini.js?v=29"></script>
-<script src="js/pdf.js?v=29"></script>
-<script src="js/app.js?v=29"></script>
-<script src="js/people.js?v=29"></script>
-<script src="js/graph.js?v=29"></script>
-<script src="js/orgs.js?v=29"></script>
-<script src="js/maintain.js?v=29"></script>
-<script src="js/ai-chat.js?v=29"></script>
+<script src="js/config.js?v=33"></script>
+<script src="js/remote.js?v=33"></script>
+<script src="js/storage.js?v=33"></script>
+<script src="js/gemini.js?v=33"></script>
+<script src="js/pdf.js?v=33"></script>
+<script src="js/app.js?v=33"></script>
+<script src="js/people.js?v=33"></script>
+<script src="js/graph.js?v=33"></script>
+<script src="js/orgs.js?v=33"></script>
+<script src="js/maintain.js?v=33"></script>
+<script src="js/ai-chat.js?v=33"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -387,14 +389,15 @@
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
     "config":   14,
-    "people":   12,
-    "storage":  15,
-    "gemini":   14,
-    "app":      19,
-    "graph":    16,
-    "ai-chat":  15,
-    "orgs":     16,
-    "maintain": 16
+    "people":   13,
+    "storage":  17,
+    "remote":   17,
+    "gemini":   15,
+    "app":      21,
+    "graph":    17,
+    "ai-chat":  16,
+    "orgs":     17,
+    "maintain": 17
   };
 
   var got = window.APP_BUILD || {};

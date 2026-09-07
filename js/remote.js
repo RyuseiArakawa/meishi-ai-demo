@@ -1,3 +1,6 @@
+/* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
+(window.APP_BUILD = window.APP_BUILD || {})["remote"] = 17;
+
 /* =============================================================================
    スプレッドシートとのやりとり
 
@@ -158,8 +161,9 @@ const Remote = (function () {
             dataUrl: copy.image_path,
           });
           copy.image_file_id = r.fileId;
+          // 送り終えた画像は、この場の控えとして持っておく
           if (r.fileId) imageCache[r.fileId] = copy.image_path;
-          // 画面側にも、どこに保存されたかを伝える
+          // 画面側にも伝える（端末からは消して、容量を空ける）
           if (typeof Storage !== "undefined" && Storage.noteCardImageId) {
             Storage.noteCardImageId(copy.id, r.fileId);
           }
@@ -203,3 +207,7 @@ const Remote = (function () {
     isAvailable: () => available === true,
   };
 })();
+
+/* 他のファイルから window.Remote でも参照できるようにしておく。
+   const で定義したものは、そのままでは window に付かないため。 */
+window.Remote = Remote;

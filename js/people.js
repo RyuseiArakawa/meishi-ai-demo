@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["people"] = 12;
+(window.APP_BUILD = window.APP_BUILD || {})["people"] = 13;
 
 /* =============================================================================
    人物の画面（Phase 2）
@@ -19,6 +19,9 @@ const People = (function () {
 
   const esc = UI.esc;
   const $ = UI.$;
+
+  // スプレッドシート共有を使っているか（名刺画像をドライブから取り出せるか）
+  const hasRemote = () => typeof Remote !== "undefined";
 
   /* --- 一覧の絞り込み条件。画面を離れても覚えておく --------------------- */
   let filter = { query: "", orgId: "", sort: "name" };
@@ -137,7 +140,7 @@ const People = (function () {
     ].filter(Boolean).join("　／　");
 
     const thumb = card
-      ? (card.image_path || (window.Remote && Remote.cachedImage(card.image_file_id)))
+      ? (card.image_path || (hasRemote() ? Remote.cachedImage(card.image_file_id) : null))
       : null;
 
     return '<button class="prow" data-screen="person" data-id="' + p.id + '">'
@@ -451,13 +454,13 @@ const People = (function () {
     if (!card) return '<div class="noimg-box">名刺画像はありません</div>';
 
     const ready = card.image_path
-      || (window.Remote && Remote.cachedImage(card.image_file_id));
+      || (hasRemote() ? Remote.cachedImage(card.image_file_id) : null);
 
     if (ready) {
       return '<img class="cardshot" id="card-img" src="' + ready + '" alt="'
         + esc(p.name) + 'さんの名刺">';
     }
-    if (card.image_file_id && window.Remote) {
+    if (card.image_file_id && hasRemote()) {
       // 先に枠だけ出して、あとから差し替える
       setTimeout(function () {
         Remote.getImage(card.image_file_id).then(function (dataUrl) {
@@ -614,3 +617,7 @@ const People = (function () {
 
   return { enter: enter, renderList: renderList, renderDetail: renderDetail };
 })();
+
+/* 他のファイルから window.People でも参照できるようにしておく。
+   const で定義したものは、そのままでは window に付かないため。 */
+window.People = People;

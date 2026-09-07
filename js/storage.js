@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["storage"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["storage"] = 17;
 
 /* =============================================================================
    データ保存
@@ -774,13 +774,12 @@ const Storage = (function () {
       next[local] = Array.isArray(data[sheetName]) ? data[sheetName] : [];
     });
 
-    // すでに手元にある画像は、そのまま使えるように引き継ぐ
-    const known = {};
+    // すでに取り出してある画像は、端末には戻さず、その場の控えとして持ち直す。
+    // （保存領域を使わずに、表示だけは速いまま）
     db.business_cards.forEach(function (c) {
-      if (c.image_path) known[c.id] = c.image_path;
-    });
-    next.business_cards.forEach(function (c) {
-      if (!c.image_path && known[c.id]) c.image_path = known[c.id];
+      if (c.image_path && c.image_file_id && typeof Remote !== "undefined") {
+        Remote.cacheImage(c.image_file_id, c.image_path);
+      }
     });
 
     db = next;
@@ -804,10 +803,34 @@ const Storage = (function () {
     return { ok: true, count: count };
   }
 
-  /** 画像をドライブへ送ったあと、その置き場所を控える */
+  /**
+   * 画像をドライブへ送ったあと、その置き場所を控える。
+   *
+   * 共有しているときは、送り終えた画像をこの端末から消します。
+   * 名刺画像は容量のほとんどを占めるため、端末に置き続けると
+   * ブラウザの保存領域（約5MB）をすぐ使い切ってしまうためです。
+   * 表示するときは、そのつどドライブから取り出します。
+   */
   function noteCardImageId(cardId, fileId) {
     const c = db.business_cards.find((x) => x.id === cardId);
-    if (c && !c.image_file_id) { c.image_file_id = fileId; persist(); }
+    if (!c) return;
+    c.image_file_id = c.image_file_id || fileId;
+    if (sharedMode && c.image_file_id) c.image_path = null;
+    persist();
+  }
+
+  /** この端末に残っている名刺画像を、まとめて手放す */
+  function releaseLocalImages() {
+    let n = 0;
+    db.business_cards.forEach(function (c) {
+      if (c.image_path && c.image_file_id) {
+        if (typeof Remote !== "undefined") Remote.cacheImage(c.image_file_id, c.image_path);
+        c.image_path = null;
+        n++;
+      }
+    });
+    if (n) persist();
+    return n;
   }
 
   /* --- つながりの経路をさがす（AIチャットとグラフで共用）--------------------
@@ -1168,7 +1191,13 @@ const Storage = (function () {
   /* --- 集計 --------------------------------------------------------------- */
 
   function getStats() {
+    // 何が容量を使っているかを分けて数える（ほとんどは名刺画像）
+    const imageBytes = db.business_cards.reduce(function (sum, c) {
+      return sum + (c.image_path ? c.image_path.length : 0);
+    }, 0);
+
     return {
+      imageBytes: imageBytes,
       persons: db.persons.length,
       organizations: db.organizations.length,
       cards: db.business_cards.length,
@@ -1242,6 +1271,7 @@ const Storage = (function () {
     getCurrentUserId, getCurrentUser, setCurrentUser,
     getCardOwner, getContactsOfUser, getUsersWhoKnow,
     enableShared, isShared, applyRemote, noteCardImageId, pushAll,
+    releaseLocalImages,
     findConnectionPath, displayName, relationBetween,
 
     // 整理（名寄せ・表記ゆれ）と集計
@@ -1257,3 +1287,7 @@ const Storage = (function () {
     getStats, exportJSON, importJSON, clearAll,
   };
 })();
+
+/* 他のファイルから window.Storage でも参照できるようにしておく。
+   const で定義したものは、そのままでは window に付かないため。 */
+window.Storage = Storage;

@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 19;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 21;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -94,6 +94,20 @@
     $("stat-relations").textContent = s.relationships;
     $("stat-cards").textContent = s.cards;
     $("stat-size").innerHTML = (s.bytes / 1024 / 1024).toFixed(2) + "<i>MB</i>";
+
+    // 何の容量なのかを、その場で説明する
+    const pct = Math.round((s.bytes / (5 * 1024 * 1024)) * 100);
+    const imgPct = s.bytes ? Math.round((s.imageBytes / s.bytes) * 100) : 0;
+    $("size-note").innerHTML =
+        '<span>この端末のブラウザが保存している大きさです（上限は約5MB、いま '
+      +   pct + "%）。</span>"
+      + "<span>大部分は名刺画像です（" + (s.imageBytes / 1024 / 1024).toFixed(2)
+      +   " MB・全体の " + imgPct + "%）。</span>"
+      + (Storage.isShared()
+        ? "<span>本体はスプレッドシートにあります。"
+          + "名刺画像はGoogleドライブに置き、この端末には残していません。</span>"
+        : "<span>いまはこの端末にしか保存されていません。"
+          + "上限に近づいたら、JSONで書き出してから古いものを削除してください。</span>");
 
     const warn = $("storage-warning");
     if (!Storage.isPersistent) {
@@ -604,7 +618,7 @@
 
   function renderUserBar() {
     const me = Storage.getCurrentUser();
-    const signedIn = window.Auth && Auth.isRequired();
+    const signedIn = (typeof Auth !== "undefined") && Auth.isRequired();
 
     // ログインしている場合は、自分で選び直すことはできません
     $("userbar").innerHTML = me
@@ -808,6 +822,9 @@
     } catch (err) {
       renderSyncState(Remote.status());
     }
+
+    // 名刺画像はドライブにあるので、端末には残さない
+    Storage.releaseLocalImages();
 
     renderDashboard();
     renderUserBar();
