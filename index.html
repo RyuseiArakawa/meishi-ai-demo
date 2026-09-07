@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=23">
+<link rel="stylesheet" href="css/style.css?v=25">
 </head>
 <body>
 
@@ -281,8 +281,10 @@
   <section id="screen-maintain" class="screen" hidden>
     <header class="page-head">
       <h1>整理</h1>
-      <p>同じ人物が二重に登録されていないか、専門分野の書き方がばらついていないかを確かめます。
-        まとめるかどうかは、内容を見て人が決めてください。</p>
+      <p class="lines">
+        <span>同じ人物が二重に登録されていないか、専門分野の書き方がばらついていないかを確かめます。</span>
+        <span>まとめるかどうかは、内容を見て人が決めてください。</span>
+      </p>
     </header>
     <div id="maintain-body"></div>
   </section>
@@ -291,7 +293,10 @@
   <section id="screen-graph" class="screen" hidden>
     <header class="page-head">
       <h1>人脈</h1>
-      <p>線が引かれているのは、人が登録した関係だけです。同じ組織にいるというだけでは線を引きません。<br>マウスホイールで拡大・縮小、何もないところをつかむと図全体を動かせます。</p>
+      <p class="lines">
+        <span>線が引かれているのは、人が登録した関係だけです。同じ組織にいるというだけでは線を引きません。</span>
+        <span>マウスホイールで拡大・縮小、何もないところをつかむと図全体を動かせます。</span>
+      </p>
     </header>
 
     <div class="controls graph-controls" id="graph-controls"></div>
@@ -362,17 +367,17 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=23"></script>
-<script src="js/remote.js?v=23"></script>
-<script src="js/storage.js?v=23"></script>
-<script src="js/gemini.js?v=23"></script>
-<script src="js/pdf.js?v=23"></script>
-<script src="js/app.js?v=23"></script>
-<script src="js/people.js?v=23"></script>
-<script src="js/graph.js?v=23"></script>
-<script src="js/orgs.js?v=23"></script>
-<script src="js/maintain.js?v=23"></script>
-<script src="js/ai-chat.js?v=23"></script>
+<script src="js/config.js?v=25"></script>
+<script src="js/remote.js?v=25"></script>
+<script src="js/storage.js?v=25"></script>
+<script src="js/gemini.js?v=25"></script>
+<script src="js/pdf.js?v=25"></script>
+<script src="js/app.js?v=25"></script>
+<script src="js/people.js?v=25"></script>
+<script src="js/graph.js?v=25"></script>
+<script src="js/orgs.js?v=25"></script>
+<script src="js/maintain.js?v=25"></script>
+<script src="js/ai-chat.js?v=25"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -388,7 +393,7 @@
     "graph":    13,
     "ai-chat":  14,
     "orgs":     15,
-    "maintain": 15
+    "maintain": 16
   };
 
   var got = window.APP_BUILD || {};

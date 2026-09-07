@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["maintain"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["maintain"] = 16;
 
 /* =============================================================================
    整理（Phase 6）
@@ -31,9 +31,9 @@ const Maintain = (function () {
       /* ---- 人物の重複 ---- */
       + '<section class="block">'
       +   "<h3>同じ人物かもしれない組（" + dupes.length + "）</h3>"
-      +   '<p class="note" style="margin:-6px 0 14px">'
-      +     "氏名かメールアドレスが一致するものを挙げています。"
-      +     "同姓同名の別人である場合もあるので、内容を確かめてからまとめてください。"
+      +   '<p class="note lines" style="margin:-6px 0 14px">'
+      +     "<span>氏名かメールアドレスが一致するものを挙げています。</span>"
+      +     "<span>同姓同名の別人である場合もあるので、内容を確かめてからまとめてください。</span>"
       +   "</p>"
       +   (dupes.length
           ? dupes.map(personGroupHtml).join("")
@@ -43,9 +43,9 @@ const Maintain = (function () {
       /* ---- 専門分野の表記ゆれ ---- */
       + '<section class="block">'
       +   "<h3>同じ意味かもしれない専門分野（" + topics.length + "）</h3>"
-      +   '<p class="note" style="margin:-6px 0 14px">'
-      +     "文字が含まれ合うものを挙げています。"
-      +     "別の意味であればまとめないでください（例：「加工」と「微細加工」）。"
+      +   '<p class="note lines" style="margin:-6px 0 14px">'
+      +     "<span>文字が含まれ合うものを挙げています。</span>"
+      +     "<span>別の意味であればまとめないでください（例：「加工」と「微細加工」）。</span>"
       +   "</p>"
       +   (topics.length
           ? topics.map(topicGroupHtml).join("")
