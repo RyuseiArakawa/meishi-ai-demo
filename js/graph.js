@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 19;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 20;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -488,10 +488,21 @@ const Graph = (function () {
       active = -1;
     }
 
+    // 一度に出す上限。多すぎると探しにくいので区切るが、
+    // 区切ったことは必ず画面に出す（黙って減らすと、いないと勘違いするため）
+    const MAX_SHOWN = 60;
+
     function open(query) {
-      shown = candidates(query).slice(0, 30);
+      const all = candidates(query);
+      shown = all.slice(0, MAX_SHOWN);
+      const rest = all.length - shown.length;
+
       if (!shown.length) {
-        list.innerHTML = '<span class="combo-empty">見つかりません</span>';
+        list.innerHTML = '<span class="combo-empty">'
+          + (state.scope === "mine"
+            ? "見つかりません。「表示」が『自分の名刺だけ』になっています。"
+            : "見つかりません。")
+          + "</span>";
       } else {
         list.innerHTML = shown.map(function (n, i) {
           return '<span class="combo-item' + (i === active ? " is-active" : "") + '"'
@@ -500,7 +511,15 @@ const Graph = (function () {
             + (n.kana ? '<span class="ci-kana">' + esc(n.kana) + "</span>" : "")
             + '<span class="ci-org">' + esc(n.isUser ? "社内" : (n.org || "")) + "</span>"
             + "</span>";
-        }).join("");
+        }).join("")
+        + (rest > 0
+          ? '<span class="combo-more">ほか ' + rest + " 件。"
+            + "氏名・ふりがな・組織を打ち込むと絞り込めます。</span>"
+          : "")
+        + (state.scope === "mine"
+          ? '<span class="combo-more">「表示」が『自分の名刺だけ』のため、'
+            + "その相手だけが出ています。</span>"
+          : "");
       }
       list.hidden = false;
       input.setAttribute("aria-expanded", "true");

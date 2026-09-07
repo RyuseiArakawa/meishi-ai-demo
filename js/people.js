@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["people"] = 14;
+(window.APP_BUILD = window.APP_BUILD || {})["people"] = 15;
 
 /* =============================================================================
    人物の画面（Phase 2）
@@ -590,10 +590,14 @@ const People = (function () {
   /* 専門分野と交流記録の「削除」は、押される場所が描き直しのたびに変わる。
      そのため、外側の入れ物に1回だけ見張りを付けておく。
      （描き直すたびに付けると、見張りが積み重なってしまう） */
+  // ※ bound は、下の呼び出しより先に用意しておくこと。
+  //    読み込みが済んだあとに このファイルが読まれた場合、
+  //    後ろで宣言していると「まだ使えない」というエラーになる。
+  let bound = false;
+
   document.addEventListener("DOMContentLoaded", bindDelegated);
   if (document.readyState !== "loading") bindDelegated();
 
-  let bound = false;
   function bindDelegated() {
     if (bound) return;
     const box = $("person-body");

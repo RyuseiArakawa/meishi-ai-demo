@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=38">
+<link rel="stylesheet" href="css/style.css?v=41">
 </head>
 <body>
 
@@ -64,13 +64,6 @@
 
   <!-- ---------- ダッシュボード ---------- -->
   <section id="screen-dashboard" class="screen">
-
-    <div class="statusbar">
-      <div class="sb-user" id="userbar"></div>
-      <div class="sb-sep"></div>
-      <div id="conn" class="conn conn-unknown">接続を確認中…</div>
-      <div id="syncstate" class="conn conn-unknown">保存先を確認中…</div>
-    </div>
 
     <header class="page-head">
       <h1>ダッシュボード</h1>
@@ -332,6 +325,25 @@
   </div>
 </div>
 
+<!-- 右上の利用者アイコン。どの画面からでも見えます。 -->
+<button class="account" id="account" aria-haspopup="dialog" aria-expanded="false"
+        aria-label="利用者と接続の状態">
+  <span class="account-initial" id="account-initial">－</span>
+  <span class="account-dot" id="account-dot" aria-hidden="true"></span>
+</button>
+
+<div class="account-menu" id="account-menu" hidden>
+  <div class="am-head">
+    <div class="am-avatar" id="am-avatar">－</div>
+    <div id="userbar"></div>
+  </div>
+  <div class="am-status">
+    <div id="conn" class="conn conn-unknown">接続を確認中…</div>
+    <div id="syncstate" class="conn conn-unknown">保存先を確認中…</div>
+  </div>
+  <div class="am-actions" id="account-actions"></div>
+</div>
+
 <!-- AIチャット -->
 <button class="chat-fab" id="chat-fab" aria-label="AIチャットを開く" title="AIチャット">
   <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
@@ -369,17 +381,17 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=38"></script>
-<script src="js/remote.js?v=38"></script>
-<script src="js/storage.js?v=38"></script>
-<script src="js/gemini.js?v=38"></script>
-<script src="js/pdf.js?v=38"></script>
-<script src="js/app.js?v=38"></script>
-<script src="js/people.js?v=38"></script>
-<script src="js/graph.js?v=38"></script>
-<script src="js/orgs.js?v=38"></script>
-<script src="js/maintain.js?v=38"></script>
-<script src="js/ai-chat.js?v=38"></script>
+<script src="js/config.js?v=41"></script>
+<script src="js/remote.js?v=41"></script>
+<script src="js/storage.js?v=41"></script>
+<script src="js/gemini.js?v=41"></script>
+<script src="js/pdf.js?v=41"></script>
+<script src="js/app.js?v=41"></script>
+<script src="js/people.js?v=41"></script>
+<script src="js/graph.js?v=41"></script>
+<script src="js/orgs.js?v=41"></script>
+<script src="js/maintain.js?v=41"></script>
+<script src="js/ai-chat.js?v=41"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -389,12 +401,12 @@
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
     "config":   14,
-    "people":   14,
+    "people":   15,
     "storage":  17,
     "remote":   17,
     "gemini":   14,
-    "app":      21,
-    "graph":    19,
+    "app":      22,
+    "graph":    20,
     "ai-chat":  15,
     "orgs":     17,
     "maintain": 16

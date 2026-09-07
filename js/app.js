@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 21;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 22;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -616,26 +616,62 @@
      利用者（誰として使うか）
      ========================================================================= */
 
+  /* 右上のアイコンと、その中身。
+     利用者・接続・保存先は、ふだんは点の色だけで分かればよいので、
+     詳しい内容は押したときに出します。 */
+
   function renderUserBar() {
     const me = Storage.getCurrentUser();
     const signedIn = (typeof Auth !== "undefined") && Auth.isRequired();
+    const initial = me ? String(me.name).replace(/[\s\u3000]/g, "").charAt(0) : "－";
 
-    // ログインしている場合は、自分で選び直すことはできません
+    $("account-initial").textContent = initial;
+    $("am-avatar").textContent = initial;
+
     $("userbar").innerHTML = me
-      ? '<div class="ub-name">' + esc(me.name) + "</div>"
-        + (signedIn
-          ? '<button class="linkbtn" id="ub-signout">ログアウト</button>'
-          : '<button class="linkbtn" id="ub-switch">切り替える</button>')
-      : (signedIn
-        ? '<div class="ub-name">―</div>'
-        : '<button class="btn btn-sm" id="ub-pick">利用者を選ぶ</button>');
+      ? '<div class="am-name">' + esc(me.name) + "</div>"
+        + (me.note ? '<div class="am-note">' + esc(me.note) + "</div>" : "")
+      : '<div class="am-name">利用者が未選択です</div>'
+        + '<div class="am-note">名刺を登録した人として記録されます</div>';
 
-    const sw = $("ub-switch"); if (sw) sw.addEventListener("click", openUserPicker);
-    const pk = $("ub-pick");   if (pk) pk.addEventListener("click", openUserPicker);
+    $("account-actions").innerHTML =
+        (Storage.isShared()
+          ? '<button class="btn btn-sm" id="am-reload">最新の状態に更新</button>' : "")
+      + (signedIn
+          ? '<button class="btn btn-sm" id="ub-signout">ログアウト</button>'
+          : '<button class="btn btn-sm" id="ub-switch">'
+            + (me ? "利用者を切り替える" : "利用者を選ぶ") + "</button>");
+
+    const sw = $("ub-switch");
+    if (sw) sw.addEventListener("click", function () { closeAccount(); openUserPicker(); });
     const so = $("ub-signout");
     if (so) so.addEventListener("click", function () {
       if (confirm("ログアウトします。よろしいですか。")) Auth.signOut();
     });
+    const rl = $("am-reload");
+    if (rl) rl.addEventListener("click", function () { closeAccount(); reload(); });
+
+    updateAccountDot();
+  }
+
+  /** 点の色。いちばん重い状態に合わせる（赤 > 黄 > 緑） */
+  function updateAccountDot() {
+    const cls = [$("conn").className, $("syncstate").className].join(" ");
+    const dot = $("account-dot");
+    dot.className = "account-dot "
+      + (cls.indexOf("conn-ng") >= 0 ? "is-ng"
+        : cls.indexOf("conn-warn") >= 0 ? "is-warn"
+        : cls.indexOf("conn-ok") >= 0 ? "is-ok" : "is-unknown");
+  }
+
+  function closeAccount() {
+    $("account-menu").hidden = true;
+    $("account").setAttribute("aria-expanded", "false");
+  }
+  function toggleAccount() {
+    const open = $("account-menu").hidden;
+    $("account-menu").hidden = !open;
+    $("account").setAttribute("aria-expanded", String(open));
   }
 
   function openUserPicker() {
@@ -695,6 +731,17 @@
   }
 
 
+  $("account").addEventListener("click", function (e) {
+    e.stopPropagation();
+    toggleAccount();
+  });
+  document.addEventListener("click", function (e) {
+    if (!$("account-menu").hidden && !e.target.closest("#account-menu")) closeAccount();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeAccount();
+  });
+
   // 小窓の外側を押しても閉じられるようにする（操作できなくならないように）
   $("user-dialog").addEventListener("click", function (e) {
     if (e.target && e.target.id === "user-dialog") $("user-dialog").hidden = true;
@@ -710,6 +757,7 @@
 
   function renderSyncState(st) {
     const el = $("syncstate");
+    setTimeout(updateAccountDot, 0);
     if (!Storage.isShared()) {
       el.className = "conn conn-unknown";
       el.textContent = "この端末の中だけに保存中";
