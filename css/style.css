@@ -438,7 +438,13 @@ input[type=text], input[type=date], input[type=search], select {
 .pdetail-meta { font-size: 13.5px; color: var(--ink2); margin-top: 4px; }
 
 .pdetail-grid { display: grid; grid-template-columns: 1fr 330px; gap: 20px; align-items: start; }
-@media (max-width: 900px) { .pdetail-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .pdetail-grid { grid-template-columns: 1fr; }
+  /* 縦に積むときは、名刺そのものを先に出す。
+     携帯では「どんな名刺だったか」を先に見たいことが多いため。 */
+  .pdetail-card { order: -1; margin-bottom: 4px; }
+  .pdetail-card .cardshot { max-width: 100%; }
+}
 
 .kv { margin: 0; border-top: 1px solid var(--rule); }
 .kv div {

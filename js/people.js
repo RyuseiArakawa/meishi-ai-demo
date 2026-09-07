@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["people"] = 13;
+(window.APP_BUILD = window.APP_BUILD || {})["people"] = 14;
 
 /* =============================================================================
    人物の画面（Phase 2）
@@ -347,7 +347,7 @@ const People = (function () {
       +   "</section>"
 
       /* ---- 右：名刺画像 ---- */
-      +   "<div>"
+      +   '<div class="pdetail-card">'
       +     cardImageHtml(card, p)
       +     '<p class="note" style="margin-top:8px">登録日：'
             + esc(String(p.created_at || "").slice(0, 10))
