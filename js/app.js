@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 25;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 26;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -100,7 +100,12 @@
   /* 開いた時点のURLを、いちばん先に控えておく。
      起動処理の中で最初に show("dashboard") を呼ぶため、
      その前に控えておかないと、戻り先が上書きされてしまう。 */
+  /* 開いた時点で、どの画面を出すかを決めてしまう。
+     以前は「まずダッシュボードを出し、あとで戻す」形にしていたが、
+     起動処理の途中で止まると戻れなかった。
+     はじめからその画面を出せば、途中で何が起きても関係がない。 */
   const openedWith = readHash() || recallScreen();
+  const firstScreen = openedWith || { name: "dashboard", id: "" };
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -885,7 +890,8 @@
   Remote.onChange(renderSyncState);
 
   async function start() {
-    show("dashboard");
+    // 前に見ていた画面を、はじめから出す
+    show(firstScreen.name, firstScreen.id);
     renderUserBar();
     renderSyncState(Remote.status());
 
@@ -946,12 +952,20 @@
     if (!Storage.getCurrentUser()) openUserPicker();
   }
 
-  /** URLに残っている画面へ戻す。無ければダッシュボードのまま。 */
-  function restoreScreen() {
-    const h = openedWith;      // 開いた時点のURL（起動処理で書き換わる前のもの）
-    if (!h) return;
-    if (h.name === "person" && !Storage.getPerson(h.id)) return;   // 消えた人物
-    show(h.name, h.id);
+  /** いま出している画面を、いまのデータで描き直す */
+  function refreshCurrent() {
+    const name = SCREENS.find(function (s) {
+      const el = document.getElementById("screen-" + s);
+      return el && el.hidden === false;
+    }) || "dashboard";
+
+    if (name === "person") {
+      // 人物が消えていた場合は、一覧へ逃がす
+      if (!Storage.getPerson(firstScreen.id)) { show("people"); return; }
+      show("person", firstScreen.id);
+      return;
+    }
+    if (KEEPABLE.indexOf(name) >= 0) show(name, firstScreen.id);
   }
 
 
@@ -985,8 +999,11 @@
       sy.className = "conn conn-ng";
       sy.textContent = "保存先を確認できませんでした";
     }).then(function () {
-      // 起動に失敗しても、見ていた画面には戻す
-      restoreScreen();
+      /* データが届いたので、いま出している画面を中身つきで描き直す。
+         共有の場合、最初に出した時点ではまだ空のため。
+         start() の中で呼ぶと、共有を使っていない経路を通らないので、
+         ここで必ず呼ぶ。 */
+      refreshCurrent();
     });
   }
 
