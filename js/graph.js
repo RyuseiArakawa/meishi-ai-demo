@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 20;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 21;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -1146,7 +1146,7 @@ const Graph = (function () {
           }).join("") + "</ul>"
         : '<p class="empty">ありません。</p>')
       + '<div class="btn-row">'
-      +   '<button class="btn btn-sm" data-screen="person" data-id="' + p.id + '">人物の画面をひらく</button>'
+      +   '<button class="btn btn-sm" data-screen="person" data-id="' + p.id + '">この人の詳細を見る</button>'
       +   '<button class="btn btn-sm" id="gp-from">ここを経路の起点にする</button>'
       + "</div>"
       + legendHtml();

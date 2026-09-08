@@ -114,7 +114,14 @@ button { font-family: inherit; font-size: inherit; }
 
 /* ===== 中央：内容 ========================================================= */
 
-.content { flex: 1; padding: 30px 34px 70px; max-width: 1180px; min-width: 0; }
+/* 内容の幅。
+   以前は 1180px で止めていたため、画面が広いと右側だけ大きく空いていた。
+   画面に合わせて広がるようにし、極端に広い画面では左右均等に余白を取る。 */
+.content {
+  flex: 1; min-width: 0;
+  padding: 30px 34px 70px;
+  max-width: 1600px; margin: 0 auto;
+}
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 {

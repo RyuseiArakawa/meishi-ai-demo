@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 22;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 24;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -53,6 +53,37 @@
   const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person",
                    "orgs", "graph", "maintain"];
 
+  /* 読み込み直しても、見ていた画面に戻れるようにする。
+     いまの画面をURLの末尾（#/people など）に書いておき、
+     開いたときにそこから復元します。
+     ブラウザの「戻る」も使えるようになります。
+
+     名刺の読み取り途中（confirm・done）は、その場かぎりの状態なので戻しません。 */
+  const KEEPABLE = ["dashboard", "capture", "people", "person", "orgs", "graph", "maintain"];
+
+  /* 自分で書き換えたURLか、利用者が「戻る」で変えたURLかを見分けるために、
+     最後に自分で書いた値を覚えておく。
+     （時間差で判定すると、続けて画面を移ったときに取りこぼす） */
+  let lastHash = "";
+
+  function hashOf(name, id) {
+    return "#/" + name + (id ? "/" + encodeURIComponent(id) : "");
+  }
+
+  function readHash() {
+    const raw = String(location.hash || "").replace(/^#\/?/, "");
+    if (!raw) return null;
+    const parts = raw.split("/");
+    const name = parts[0];
+    if (KEEPABLE.indexOf(name) < 0) return null;
+    return { name: name, id: parts[1] ? decodeURIComponent(parts[1]) : "" };
+  }
+
+  /* 開いた時点のURLを、いちばん先に控えておく。
+     起動処理の中で最初に show("dashboard") を呼ぶため、
+     その前に控えておかないと、戻り先が上書きされてしまう。 */
+  const openedWith = readHash();
+
   function show(name, id) {
     SCREENS.forEach(function (s) {
       const el = $("screen-" + s);
@@ -73,8 +104,23 @@
     if (name === "graph") Graph.enter();
     if (name === "maintain") Maintain.enter();
 
+    // いまの画面をURLに残す
+    if (KEEPABLE.indexOf(name) >= 0) {
+      const next = hashOf(name, id);
+      lastHash = next;
+      if (location.hash !== next) location.hash = next;
+    }
+
     window.scrollTo(0, 0);
   }
+
+  // ブラウザの「戻る」や、URLの直接入力にも合わせる
+  window.addEventListener("hashchange", function () {
+    if (location.hash === lastHash) return;   // 自分で書き換えたぶん
+    const h = readHash();
+    if (!h) return;
+    show(h.name, h.id);
+  });
 
   document.addEventListener("click", function (e) {
     const el = e.target.closest("[data-screen]");
@@ -140,7 +186,7 @@
             + "</button>";
         }).join("")
         + '<div class="btn-row"><button class="btn btn-sm" data-screen="people">'
-        + "人物一覧をひらく</button></div>"
+        + "人物一覧を見る</button></div>"
       : '<p class="empty">まだ登録がありません。「名刺登録」から始めてください。</p>';
   }
 
@@ -881,6 +927,14 @@
     if (!Storage.getCurrentUser()) openUserPicker();
   }
 
+  /** URLに残っている画面へ戻す。無ければダッシュボードのまま。 */
+  function restoreScreen() {
+    const h = openedWith;      // 開いた時点のURL（起動処理で書き換わる前のもの）
+    if (!h) return;
+    if (h.name === "person" && !Storage.getPerson(h.id)) return;   // 消えた人物
+    show(h.name, h.id);
+  }
+
 
   /* =========================================================================
      起動のきっかけ
@@ -901,7 +955,9 @@
       console.error("AIチャットを準備できませんでした", err);
     }
 
-    start().catch(function (err) {
+    // 読み込み直す前に見ていた画面へ戻す。
+    // 共有を使っていない場合も通るよう、起動処理の後に必ず呼ぶ。
+    start().then(restoreScreen).catch(function (err) {
       console.error("起動に失敗しました", err);
       const el = $("conn");
       el.className = "conn conn-ng";
