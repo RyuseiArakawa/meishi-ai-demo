@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 28;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 29;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -22,6 +22,15 @@
     });
   }
   const $ = (id) => document.getElementById(id);
+
+  /* 要素があるときだけ、見張りを付ける。
+     画面の作り替えで要素が無くなっても、そこで止まらないようにするため。
+     （無い場合は console に出すので、消し忘れにも気づけます） */
+  function on(id, type, fn) {
+    const el = $(id);
+    if (!el) { console.warn("見つからない要素に見張りを付けようとしました：" + id); return; }
+    el.addEventListener(type, fn);
+  }
 
   // people.js からも使えるように、共通の道具を外に出しておく
   window.UI = { esc: esc, $: $, show: show };
@@ -433,11 +442,11 @@
     $("thumb-strip").scrollLeft = $("thumb-strip").scrollWidth;
   }
 
-  $("file-input").addEventListener("change", (e) => handleFiles(e.target.files));
-  $("camera-input").addEventListener("change", (e) => handleFiles(e.target.files));
-  $("btn-pick").addEventListener("click", () => $("file-input").click());
-  $("btn-camera").addEventListener("click", () => $("camera-input").click());
-  $("btn-stop").addEventListener("click", function () {
+  on("file-input", "change", (e) => handleFiles(e.target.files));
+  on("camera-input", "change", (e) => handleFiles(e.target.files));
+  on("btn-pick", "click", () => $("file-input").click());
+  on("btn-camera", "click", () => $("camera-input").click());
+  on("btn-stop", "click", function () {
     batch.stop = true;
     setProgress("中止しています…");
   });
@@ -578,7 +587,7 @@
     }
   }
 
-  $("batch-items").addEventListener("click", function (e) {
+  on("batch-items", "click", function (e) {
     const check = e.target.closest("[data-check]");
     if (check) {
       batch.items[Number(check.dataset.check)].include = check.checked;
@@ -592,15 +601,15 @@
     }
   });
 
-  $("btn-toggle-all").addEventListener("click", function () {
+  on("btn-toggle-all", "click", function () {
     const allOn = batch.items.every((it) => it.include);
     batch.items.forEach((it) => { it.include = !allOn; });
     renderBatchList(); renderLedger();
   });
 
-  $("btn-retry").addEventListener("click", () => show("capture"));
+  on("btn-retry", "click", () => show("capture"));
 
-  $("btn-register").addEventListener("click", function () {
+  on("btn-register", "click", function () {
     const targets = batch.items.filter((it) => it.include);
     if (!targets.length) return;
 
@@ -668,7 +677,7 @@
 
   const importJson = () => $("import-file").click();
 
-  $("import-file").addEventListener("change", function (e) {
+  on("import-file", "change", function (e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -822,7 +831,7 @@
       });
     });
 
-    $("btn-add-user").addEventListener("click", function () {
+    on("btn-add-user", "click", function () {
       const r = Storage.addUser($("new-user").value, "", $("new-user-note").value);
       if (!r.ok && r.error) { alert(r.error); return; }
       Storage.setCurrentUser(r.id);
@@ -831,13 +840,13 @@
       renderDashboard();
     });
 
-    $("btn-close-user").addEventListener("click", function () {
+    on("btn-close-user", "click", function () {
       $("user-dialog").hidden = true;
     });
   }
 
 
-  $("account").addEventListener("click", function (e) {
+  on("account", "click", function (e) {
     e.stopPropagation();
     toggleAccount();
   });
@@ -849,7 +858,7 @@
   });
 
   // 小窓の外側を押しても閉じられるようにする（操作できなくならないように）
-  $("user-dialog").addEventListener("click", function (e) {
+  on("user-dialog", "click", function (e) {
     if (e.target && e.target.id === "user-dialog") $("user-dialog").hidden = true;
   });
   document.addEventListener("keydown", function (e) {
@@ -899,9 +908,6 @@
     }
     if (btn) { btn.disabled = false; btn.textContent = "最新の状態に更新"; }
   }
-
-  const reloadBtn = $("btn-reload");
-  if (reloadBtn) reloadBtn.addEventListener("click", reload);
 
   // 手元のデータを、まとめてスプレッドシートへ送る
   function pushAll() {
@@ -1020,7 +1026,7 @@
     try {
       // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
       AIChat.init();
-      $("card-chat").addEventListener("click", AIChat.show);
+      on("card-chat", "click", AIChat.show);
     } catch (err) {
       // ここで止まっても、名刺登録などは使えるようにしておく
       console.error("AIチャットを準備できませんでした", err);

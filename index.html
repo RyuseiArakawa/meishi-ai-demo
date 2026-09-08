@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=48">
+<link rel="stylesheet" href="css/style.css?v=49">
 </head>
 <body>
 
@@ -254,6 +254,8 @@
       </p>
     </header>
     <div id="settings-body"></div>
+    <!-- JSONを読み込むための入力欄（画面には出ません） -->
+    <input type="file" id="import-file" accept="application/json" hidden>
   </section>
 
   <!-- ---------- 組織（Phase 6） ---------- -->
@@ -380,18 +382,18 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=48"></script>
-<script src="js/remote.js?v=48"></script>
-<script src="js/storage.js?v=48"></script>
-<script src="js/gemini.js?v=48"></script>
-<script src="js/pdf.js?v=48"></script>
-<script src="js/app.js?v=48"></script>
-<script src="js/settings.js?v=48"></script>
-<script src="js/people.js?v=48"></script>
-<script src="js/graph.js?v=48"></script>
-<script src="js/orgs.js?v=48"></script>
-<script src="js/maintain.js?v=48"></script>
-<script src="js/ai-chat.js?v=48"></script>
+<script src="js/config.js?v=49"></script>
+<script src="js/remote.js?v=49"></script>
+<script src="js/storage.js?v=49"></script>
+<script src="js/gemini.js?v=49"></script>
+<script src="js/pdf.js?v=49"></script>
+<script src="js/app.js?v=49"></script>
+<script src="js/settings.js?v=49"></script>
+<script src="js/people.js?v=49"></script>
+<script src="js/graph.js?v=49"></script>
+<script src="js/orgs.js?v=49"></script>
+<script src="js/maintain.js?v=49"></script>
+<script src="js/ai-chat.js?v=49"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -405,7 +407,7 @@
     "storage":  18,
     "remote":   17,
     "gemini":   14,
-    "app":      28,
+    "app":      29,
     "settings":  2,
     "graph":    22,
     "ai-chat":  16,
