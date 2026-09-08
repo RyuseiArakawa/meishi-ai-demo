@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 24;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 25;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -66,6 +66,24 @@
      （時間差で判定すると、続けて画面を移ったときに取りこぼす） */
   let lastHash = "";
 
+  /* URLだけに頼らず、この端末にも控えておく。
+     アプリ内で開くブラウザ（Teams など）では、読み込み直すときに
+     「#」より後ろが落ちることがあるため。 */
+  const SCREEN_KEY = "meishi_screen_v1";
+
+  function rememberScreen(name, id) {
+    try { localStorage.setItem(SCREEN_KEY, JSON.stringify({ name: name, id: id || "" })); }
+    catch (e) {}
+  }
+  function recallScreen() {
+    try {
+      const raw = localStorage.getItem(SCREEN_KEY);
+      const s = raw ? JSON.parse(raw) : null;
+      if (s && KEEPABLE.indexOf(s.name) >= 0) return s;
+    } catch (e) {}
+    return null;
+  }
+
   function hashOf(name, id) {
     return "#/" + name + (id ? "/" + encodeURIComponent(id) : "");
   }
@@ -82,7 +100,7 @@
   /* 開いた時点のURLを、いちばん先に控えておく。
      起動処理の中で最初に show("dashboard") を呼ぶため、
      その前に控えておかないと、戻り先が上書きされてしまう。 */
-  const openedWith = readHash();
+  const openedWith = readHash() || recallScreen();
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -104,11 +122,12 @@
     if (name === "graph") Graph.enter();
     if (name === "maintain") Maintain.enter();
 
-    // いまの画面をURLに残す
+    // いまの画面を、URLとこの端末の両方に残す
     if (KEEPABLE.indexOf(name) >= 0) {
+      rememberScreen(name, id);
       const next = hashOf(name, id);
       lastHash = next;
-      if (location.hash !== next) location.hash = next;
+      try { if (location.hash !== next) location.hash = next; } catch (e) {}
     }
 
     window.scrollTo(0, 0);
@@ -957,7 +976,7 @@
 
     // 読み込み直す前に見ていた画面へ戻す。
     // 共有を使っていない場合も通るよう、起動処理の後に必ず呼ぶ。
-    start().then(restoreScreen).catch(function (err) {
+    start().catch(function (err) {
       console.error("起動に失敗しました", err);
       const el = $("conn");
       el.className = "conn conn-ng";
@@ -965,6 +984,9 @@
       const sy = $("syncstate");
       sy.className = "conn conn-ng";
       sy.textContent = "保存先を確認できませんでした";
+    }).then(function () {
+      // 起動に失敗しても、見ていた画面には戻す
+      restoreScreen();
     });
   }
 
