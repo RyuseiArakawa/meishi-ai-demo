@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 17;
+(window.APP_BUILD = window.APP_BUILD || {})["orgs"] = 18;
 
 /* =============================================================================
    組織（Phase 6）
@@ -74,7 +74,7 @@ const Orgs = (function () {
 
     return '<div class="odetail">'
       // 狭い画面のときだけ見える戻り口
-      + '<button class="orgs-back" id="orgs-back">← 組織一覧へもどる</button>'
+      + '<button class="backlink orgs-back" id="orgs-back">← 組織一覧へもどる</button>'
       + '<h2 class="odetail-name">' + esc(d.org.name) + "</h2>"
       + '<div class="odetail-meta">'
       +   esc([d.org.industry, d.org.address].filter(Boolean).join("　／　") || "")

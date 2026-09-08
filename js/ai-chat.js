@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["ai-chat"] = 16;
 
 /* =============================================================================
    AIチャット（Phase 5）
@@ -537,10 +537,7 @@ const AIChat = (function () {
     });
     $("chat-send").addEventListener("click", function () { send(input.value); });
 
-    $("chat-clear").addEventListener("click", function () {
-      messages = [];
-      render();
-    });
+
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && open) close();
@@ -549,5 +546,13 @@ const AIChat = (function () {
     render();
   }
 
-  return { init: init, show: show, close: close, toggle: toggle, send: send };
+  /** 会話をすべて消す（設定画面から呼びます） */
+  function clearLog() {
+    messages = [];
+    lastPersons = [];
+    render();
+  }
+
+  return { init: init, show: show, close: close, toggle: toggle,
+           send: send, clearLog: clearLog, count: () => messages.length };
 })();

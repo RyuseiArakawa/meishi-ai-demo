@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 21;
+(window.APP_BUILD = window.APP_BUILD || {})["graph"] = 22;
 
 /* =============================================================================
    人脈グラフ（Phase 4）
@@ -65,9 +65,19 @@ const Graph = (function () {
      ========================================================================= */
 
   function enter() {
+    // 設定で覚えている内容があれば、それを引き継ぐ
+    if (typeof Settings !== "undefined") {
+      const saved = Settings.loadGraph();
+      if (saved) Object.assign(state, saved);
+    }
     build();
     resetView();
     render();
+  }
+
+  /** 設定が変わったら覚えておく（設定画面で切っていれば何もしません） */
+  function remember() {
+    if (typeof Settings !== "undefined") Settings.saveGraph(state);
   }
 
   /** 保存されているデータから、図に描く材料を組み立てる */
@@ -665,16 +675,19 @@ const Graph = (function () {
 
     $("g-strength").addEventListener("change", function () {
       state.minStrength = Number(this.value);
+      remember();
       applyPath();
       simulate(180);
       render();
     });
     $("g-isolated").addEventListener("change", function () {
       state.showIsolated = this.checked;
+      remember();
       render();
     });
     $("g-users").addEventListener("change", function () {
       state.showUsers = this.checked;
+      remember();
       build();
       render();
     });
@@ -688,6 +701,7 @@ const Graph = (function () {
       const ratio = next / state.spacing;
       state.nodes.forEach(function (n) { n.x *= ratio; n.y *= ratio; });
       state.spacing = next;
+      if (!light) remember();
       simulate(light ? 12 : 200);
       resetView();
       renderCanvas();
@@ -711,12 +725,14 @@ const Graph = (function () {
     $("g-scope").addEventListener("change", function () {
       state.scope = this.value;
       state.selected = null;
+      remember();
       build();
       resetView();
       render();
     });
     $("g-sole").addEventListener("change", function () {
       state.markSole = this.checked;
+      remember();
       renderCanvas();
       renderPanel();
     });

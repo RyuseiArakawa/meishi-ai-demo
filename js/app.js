@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 26;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 28;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -51,7 +51,7 @@
      ========================================================================= */
 
   const SCREENS = ["dashboard", "capture", "confirm", "done", "people", "person",
-                   "orgs", "graph", "maintain"];
+                   "orgs", "graph", "maintain", "settings"];
 
   /* 読み込み直しても、見ていた画面に戻れるようにする。
      いまの画面をURLの末尾（#/people など）に書いておき、
@@ -59,7 +59,8 @@
      ブラウザの「戻る」も使えるようになります。
 
      名刺の読み取り途中（confirm・done）は、その場かぎりの状態なので戻しません。 */
-  const KEEPABLE = ["dashboard", "capture", "people", "person", "orgs", "graph", "maintain"];
+  const KEEPABLE = ["dashboard", "capture", "people", "person", "orgs", "graph",
+                    "maintain", "settings"];
 
   /* 自分で書き換えたURLか、利用者が「戻る」で変えたURLかを見分けるために、
      最後に自分で書いた値を覚えておく。
@@ -105,7 +106,10 @@
      起動処理の途中で止まると戻れなかった。
      はじめからその画面を出せば、途中で何が起きても関係がない。 */
   const openedWith = readHash() || recallScreen();
-  const firstScreen = openedWith || { name: "dashboard", id: "" };
+  /* 実際にどの画面から始めるかは、boot() で決めます。
+     設定（js/settings.js）は、このファイルより後に読み込まれるため、
+     ここで参照するとまだ存在しません。 */
+  let firstScreen = { name: "dashboard", id: "" };
 
   function show(name, id) {
     SCREENS.forEach(function (s) {
@@ -126,6 +130,7 @@
     if (name === "orgs") Orgs.enter();
     if (name === "graph") Graph.enter();
     if (name === "maintain") Maintain.enter();
+    if (name === "settings") Settings.enter();
 
     // いまの画面を、URLとこの端末の両方に残す
     if (KEEPABLE.indexOf(name) >= 0) {
@@ -286,6 +291,14 @@
 
   function resetCapture() {
     resetBatch();
+
+    // 設定で止めているときは、読み取れないようにする
+    const locked = typeof Settings !== "undefined" && Settings.get("captureLocked");
+    $("capture-locked").hidden = !locked;
+    $("dropzone").hidden = locked;
+    $("capture-buttons").hidden = locked;
+    if (locked) { $("capture-error").hidden = true; $("reading").hidden = true; return; }
+
     $("capture-error").hidden = true;
     $("dropzone").hidden = false;
     $("capture-buttons").hidden = false;
@@ -644,16 +657,16 @@
      データの書き出し・読み込み・削除
      ========================================================================= */
 
-  $("btn-export").addEventListener("click", function () {
+  function exportJson() {
     const blob = new Blob([Storage.exportJSON()], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "organization-knowledge-" + new Date().toISOString().slice(0, 10) + ".json";
     a.click();
     URL.revokeObjectURL(a.href);
-  });
+  }
 
-  $("btn-import").addEventListener("click", () => $("import-file").click());
+  const importJson = () => $("import-file").click();
 
   $("import-file").addEventListener("change", function (e) {
     const file = e.target.files[0];
@@ -675,11 +688,34 @@
     e.target.value = "";
   });
 
-  $("btn-clear").addEventListener("click", function () {
+  function wipeAll() {
     if (!confirm("登録したデータをすべて削除します。元に戻せません。")) return;
     Storage.clearAll();
     renderDashboard();
-  });
+    if (!$("screen-settings").hidden) Settings.render();
+  }
+
+  /* 設定画面のボタンは、ここでの処理につなぎます。
+     データの扱いは、もともとこのファイルが持っているためです。 */
+  function connectSettings() {
+    Settings.setOnChange(function (name) {
+      if (name === "export") exportJson();
+      else if (name === "import") importJson();
+      else if (name === "wipe") wipeAll();
+      else if (name === "pushall") pushAll();
+      else if (name === "clear-chat") {
+        if (typeof AIChat !== "undefined") {
+          const n = AIChat.count();
+          AIChat.clearLog();
+          alert(n ? "会話を消しました。" : "消す会話はありませんでした。");
+        }
+      }
+      else if (name === "keepImages" || name === "presenting" || name === "captureLocked") {
+        // 見え方が変わるので、いま出している画面を描き直す
+        refreshCurrent();
+      }
+    });
+  }
 
 
   /* =========================================================================
@@ -868,8 +904,7 @@
   if (reloadBtn) reloadBtn.addEventListener("click", reload);
 
   // 手元のデータを、まとめてスプレッドシートへ送る
-  const pushBtn = $("btn-pushall");
-  if (pushBtn) pushBtn.addEventListener("click", function () {
+  function pushAll() {
     const s = Storage.getStats();
     if (!confirm(
         "手元にあるデータをすべてスプレッドシートへ送ります。\n\n"
@@ -879,8 +914,8 @@
 
     const r = Storage.pushAll();
     if (!r.ok) { alert(r.error); return; }
-    alert(r.count + " 行を送信箱に入れました。左下に進み具合が出ます。");
-  });
+    alert(r.count + " 行を送信箱に入れました。右上のアイコンで進み具合が分かります。");
+  }
 
 
   /* =========================================================================
@@ -931,7 +966,6 @@
 
     // 2. 共有データベースを使う
     Storage.enableShared(true);
-    $("shared-tools").hidden = false;
 
     // 3. たまっていた未送信分を先に送ってから、最新を読み込む
     await Remote.flush();
@@ -942,8 +976,8 @@
       renderSyncState(Remote.status());
     }
 
-    // 名刺画像はドライブにあるので、端末には残さない
-    Storage.releaseLocalImages();
+    // 名刺画像はドライブにあるので、既定では端末に残さない
+    if (!Settings.get("keepImages")) Storage.releaseLocalImages();
 
     renderDashboard();
     renderUserBar();
@@ -979,6 +1013,10 @@
      ========================================================================= */
 
   function boot() {
+    // 設定が読み込まれたので、ここで始める画面を決める
+    if (Settings.get("restoreScreen") !== false && openedWith) firstScreen = openedWith;
+    connectSettings();
+
     try {
       // AIチャットは画面ではなく、どの画面からでも開ける小窓にしています
       AIChat.init();

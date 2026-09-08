@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=45">
+<link rel="stylesheet" href="css/style.css?v=48">
 </head>
 <body>
 
@@ -49,6 +49,7 @@
     <li><button class="nav-item" data-screen="orgs">組織</button></li>
     <li><button class="nav-item" data-screen="graph">人脈</button></li>
     <li><button class="nav-item" data-screen="maintain">整理</button></li>
+    <li><button class="nav-item" data-screen="settings">設定</button></li>
   </ul>
 
   <div class="sidebar-foot">
@@ -116,26 +117,6 @@
       <div id="recent-list"></div>
     </section>
 
-    <section class="block" id="shared-tools" hidden>
-      <h3>組織での共有</h3>
-      <p class="note lines"><span>保存先はスプレッドシートです。</span><span>他の人の登録を取り込むには、更新してください。</span></p>
-      <div class="btn-row">
-        <button class="btn" id="btn-reload">最新の状態に更新</button>
-        <button class="btn" id="btn-pushall">手元のデータをすべて送る</button>
-      </div>
-      <p class="note lines"><span>「JSONを読み込む」で入れたデータは、手元にしか入りません。</span><span>組織で共有するには「手元のデータをすべて送る」を押してください。</span></p>
-    </section>
-
-    <section class="block">
-      <h3>データの管理</h3>
-      <p class="note lines"><span>保存先は、このブラウザの中だけです。他の端末とは共有されません。</span><span>発表前にバックアップを取ってください。</span></p>
-      <div class="btn-row">
-        <button class="btn" id="btn-export">JSONで書き出す</button>
-        <button class="btn" id="btn-import">JSONを読み込む</button>
-        <button class="btn btn-danger" id="btn-clear">すべて削除</button>
-        <input type="file" id="import-file" accept="application/json" hidden>
-      </div>
-    </section>
   </section>
 
   <!-- ---------- 名刺登録 ---------- -->
@@ -146,6 +127,11 @@
     </header>
 
     <div id="capture-error" class="alert alert-error" hidden></div>
+
+    <div id="capture-locked" class="alert alert-warn lines" hidden>
+      <span><b>名刺の読み取りを止めています。</b></span>
+      <span>設定の「発表・デモ」から解除できます。</span>
+    </div>
 
     <div id="dropzone" class="dropzone" tabindex="0" role="button"
          aria-label="名刺の画像またはPDFを選ぶ">
@@ -258,6 +244,18 @@
     <div id="people-list"></div>
   </section>
 
+  <!-- ---------- 設定 ---------- -->
+  <section id="screen-settings" class="screen" hidden>
+    <header class="page-head">
+      <h1>設定</h1>
+      <p class="lines">
+        <span>見え方や動作を変えられます。保存先はこの端末です。</span>
+        <span>人によって見やすさが違うため、組織で共有される設定ではありません。</span>
+      </p>
+    </header>
+    <div id="settings-body"></div>
+  </section>
+
   <!-- ---------- 組織（Phase 6） ---------- -->
   <section id="screen-orgs" class="screen" hidden>
     <header class="page-head">
@@ -303,7 +301,7 @@
 
   <!-- ---------- 人物詳細（Phase 2） ---------- -->
   <section id="screen-person" class="screen" hidden>
-    <p class="backline"><button class="linkbtn" data-screen="people">← 人物一覧へもどる</button></p>
+    <p class="backline"><button class="backlink" data-screen="people">← 人物一覧へもどる</button></p>
     <div id="person-body"></div>
   </section>
 
@@ -324,6 +322,8 @@
     </p>
   </div>
 </div>
+
+<div class="presenting-tag" id="presenting-tag" hidden>発表モード（連絡先と名刺画像を伏せています）</div>
 
 <!-- 右上の利用者アイコン。どの画面からでも見えます。 -->
 <button class="account" id="account" aria-haspopup="dialog" aria-expanded="false"
@@ -364,7 +364,6 @@
       <div class="chat-sub">登録されている情報だけを根拠に答えます</div>
     </div>
     <div class="chat-head-btns">
-      <button class="linkbtn" id="chat-clear">履歴を消す</button>
       <button class="chat-x" id="chat-close" aria-label="閉じる">×</button>
     </div>
   </header>
@@ -381,17 +380,18 @@
   <div class="dialog-box" id="user-dialog-body"></div>
 </div>
 
-<script src="js/config.js?v=45"></script>
-<script src="js/remote.js?v=45"></script>
-<script src="js/storage.js?v=45"></script>
-<script src="js/gemini.js?v=45"></script>
-<script src="js/pdf.js?v=45"></script>
-<script src="js/app.js?v=45"></script>
-<script src="js/people.js?v=45"></script>
-<script src="js/graph.js?v=45"></script>
-<script src="js/orgs.js?v=45"></script>
-<script src="js/maintain.js?v=45"></script>
-<script src="js/ai-chat.js?v=45"></script>
+<script src="js/config.js?v=48"></script>
+<script src="js/remote.js?v=48"></script>
+<script src="js/storage.js?v=48"></script>
+<script src="js/gemini.js?v=48"></script>
+<script src="js/pdf.js?v=48"></script>
+<script src="js/app.js?v=48"></script>
+<script src="js/settings.js?v=48"></script>
+<script src="js/people.js?v=48"></script>
+<script src="js/graph.js?v=48"></script>
+<script src="js/orgs.js?v=48"></script>
+<script src="js/maintain.js?v=48"></script>
+<script src="js/ai-chat.js?v=48"></script>
 
 <!-- すべて読み込んだあとに、ファイルの版がそろっているか確かめる -->
 <script>
@@ -401,14 +401,15 @@
      変わっていないファイルを差し替える必要はありません。 */
   var NEED = {
     "config":   14,
-    "people":   15,
-    "storage":  17,
+    "people":   16,
+    "storage":  18,
     "remote":   17,
     "gemini":   14,
-    "app":      26,
-    "graph":    21,
-    "ai-chat":  15,
-    "orgs":     17,
+    "app":      28,
+    "settings":  2,
+    "graph":    22,
+    "ai-chat":  16,
+    "orgs":     18,
     "maintain": 16
   };
 

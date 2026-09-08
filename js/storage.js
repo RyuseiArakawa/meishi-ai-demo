@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["storage"] = 17;
+(window.APP_BUILD = window.APP_BUILD || {})["storage"] = 18;
 
 /* =============================================================================
    データ保存
@@ -815,7 +815,8 @@ const Storage = (function () {
     const c = db.business_cards.find((x) => x.id === cardId);
     if (!c) return;
     c.image_file_id = c.image_file_id || fileId;
-    if (sharedMode && c.image_file_id) c.image_path = null;
+    const keep = typeof Settings !== "undefined" && Settings.get("keepImages");
+    if (sharedMode && c.image_file_id && !keep) c.image_path = null;
     persist();
   }
 

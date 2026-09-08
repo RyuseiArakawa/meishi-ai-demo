@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["people"] = 15;
+(window.APP_BUILD = window.APP_BUILD || {})["people"] = 16;
 
 /* =============================================================================
    人物の画面（Phase 2）
@@ -22,6 +22,11 @@ const People = (function () {
 
   // スプレッドシート共有を使っているか（名刺画像をドライブから取り出せるか）
   const hasRemote = () => typeof Remote !== "undefined";
+
+  // 発表モード。連絡先と名刺画像を伏せます（設定画面で切り替え）
+  const presenting = () =>
+    typeof Settings !== "undefined" && Settings.get("presenting") === true;
+  const MASK = '<span class="masked">伏せています</span>';
 
   /* --- 一覧の絞り込み条件。画面を離れても覚えておく --------------------- */
   let filter = { query: "", orgId: "", sort: "name" };
@@ -139,7 +144,7 @@ const People = (function () {
       p.department, p.job_title,
     ].filter(Boolean).join("　／　");
 
-    const thumb = card
+    const thumb = (card && !presenting())
       ? (card.image_path || (hasRemote() ? Remote.cachedImage(card.image_file_id) : null))
       : null;
 
@@ -451,6 +456,7 @@ const People = (function () {
    * この画面を開いたときに取り出します（一覧では取りに行きません）。
    */
   function cardImageHtml(card, p) {
+    if (presenting()) return '<div class="noimg-box">名刺画像は伏せています（発表モード）</div>';
     if (!card) return '<div class="noimg-box">名刺画像はありません</div>';
 
     const ready = card.image_path
@@ -478,6 +484,8 @@ const People = (function () {
   }
 
   function readOnlyHtml(p) {
+    // 発表モードでは、連絡先だけを伏せます（所属や役職は出します）
+    const secret = { "電話番号": 1, "FAX": 1, "メールアドレス": 1, "住所": 1, "Webサイト": 1 };
     const rows = [
       ["ふりがな", p.name_kana], ["会社・組織名", Storage.getOrganizationName(p.organization_id)],
       ["部署", p.department], ["役職", p.job_title],
@@ -488,7 +496,9 @@ const People = (function () {
     if (!rows.length) return '<p class="empty">記載情報がありません。</p>';
 
     return '<dl class="kv">' + rows.map((r) =>
-      "<div><dt>" + r[0] + "</dt><dd>" + esc(r[1]) + "</dd></div>").join("") + "</dl>"
+      "<div><dt>" + r[0] + "</dt><dd>"
+      + (presenting() && secret[r[0]] ? MASK : esc(r[1]))
+      + "</dd></div>").join("") + "</dl>"
       + (p.notes ? '<div class="ai-note"><b>AIの注記：</b>' + esc(p.notes) + "</div>" : "");
   }
 
