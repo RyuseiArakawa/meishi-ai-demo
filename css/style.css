@@ -1256,7 +1256,7 @@ input[type=text], input[type=date], input[type=search], select {
 
 .account-menu {
   position: fixed; top: 66px; right: 20px; z-index: 36;
-  width: 300px; background: var(--paper);
+  width: 320px; background: var(--paper);
   border: 1px solid var(--rule2); border-radius: 4px;
   box-shadow: 0 10px 30px rgba(22, 32, 42, .22);
   padding: 16px 18px;
@@ -1280,8 +1280,16 @@ input[type=text], input[type=date], input[type=search], select {
 .am-status .conn-warn    { color: #8a6420; }
 .am-status .conn-ng      { color: var(--accent); }
 
-.am-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; }
-.am-actions .btn { flex: 1; min-width: 120px; }
+/* 横に並べると、窓の幅に収まらず文字が折り返してしまう。
+   数が少ないので、縦に並べて1行ずつ読めるようにする。 */
+.am-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+.am-actions .btn { width: 100%; }
+
+/* モデル名など、長くて折り返すと読みにくいものは小さく2行目に */
+.am-sub {
+  display: block; font-size: calc(11px * var(--fs)); color: var(--muted);
+  margin-top: 2px; overflow-wrap: anywhere; line-height: 1.5;
+}
 
 @media (max-width: 700px) {
   /* 携帯では、上の帯（メニュー）に重なるので、色を反転させて見えるようにする */
@@ -1293,7 +1301,7 @@ input[type=text], input[type=date], input[type=search], select {
   background: var(--field); border-top: 1px solid var(--rule); line-height: 1.6;
 }
 
-/* ===== 濃い背景（ダークモード） ==========================================
+/* ===== ダークモード ======================================================
    色は :root にまとめてあるので、ここで置き換えるだけで全体が変わります。
    一部、直に色を書いている箇所だけ個別に直しています。 */
 
@@ -1397,3 +1405,15 @@ body.theme-dark .backlink:hover { background: var(--field); }
   }
   .backline { margin-bottom: 16px; }
 }
+
+/* 「たとえば○○さんが抜けると…」の一文 */
+.dep-note {
+  margin-top: 14px; background: var(--accent-bg); border-left: 3px solid var(--accent);
+  padding: 10px 13px; border-radius: 0 3px 3px 0;
+  font-size: calc(13.5px * var(--fs)); color: #7d2c20;
+}
+body.theme-dark .dep-note { color: #f0b3a6; }
+.dep-note b { font-family: var(--mincho); font-size: calc(15px * var(--fs)); }
+
+/* 「すべて、ほかの人ともつながっています」の一文 */
+.dep-ok { display: block; font-size: calc(11.5px * var(--fs)); color: var(--muted); }

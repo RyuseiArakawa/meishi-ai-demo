@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["app"] = 29;
+(window.APP_BUILD = window.APP_BUILD || {})["app"] = 30;
 
 /* =============================================================================
    画面の動き（Phase 2）
@@ -940,7 +940,9 @@
     const r = await AI.ping();
     const el = $("conn");
     el.className = "conn " + (r.ok ? "conn-ok" : "conn-ng");
-    el.textContent = (r.ok ? "● " : "▲ ") + r.message;
+    // モデル名は長いので、別の行に小さく出す（同じ行に入れると途中で折り返す）
+    el.innerHTML = esc((r.ok ? "● " : "▲ ") + r.message)
+      + (r.ok && r.model ? '<span class="am-sub">モデル：' + esc(r.model) + "</span>" : "");
     if (r.ok && r.multi === false) {
       el.className = "conn conn-warn";
       el.textContent = "▲ Worker が古い版です。worker.js を貼り直してください。";

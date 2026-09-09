@@ -1,5 +1,5 @@
 /* 版の番号。index.html と照らし合わせて、古いファイルが残っていないか確かめます。 */
-(window.APP_BUILD = window.APP_BUILD || {})["gemini"] = 14;
+(window.APP_BUILD = window.APP_BUILD || {})["gemini"] = 15;
 
 /* =============================================================================
    AIへの問い合わせと、画像の準備
@@ -308,7 +308,9 @@ const AI = (function () {
       if (json.ok) {
         return {
           ok: true,
-          message: "接続できました（モデル: " + json.model + "）",
+          // モデル名は別に返す（画面では小さく2行目に出すため）
+          message: "接続できました",
+          model: json.model || "",
           multi: json.multi === true,
           aiSearch: json.ai_search === true,
           sharedDb: json.shared_db === true,
